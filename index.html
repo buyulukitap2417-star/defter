@@ -26,27 +26,48 @@
             margin: 30px auto;
             position: relative;
             user-select: none;
+            transform-origin: top center;
         }
-        /* Performance Layering */
-        canvas {
+        .page-header {
             position: absolute;
             top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e2e8f0;
+            z-index: 10;
+            background: rgba(255,255,255,0.8);
+        }
+        .page-header input {
+            border: none;
+            background: transparent;
+            font-weight: 600;
+            color: #475569;
+            outline: none;
+        }
+        canvas {
+            position: absolute;
+            top: 60px; /* Header altından başla */
             left: 0;
             outline: none;
         }
-        .base-canvas { z-index: 2; } /* Kalıcı çizimler */
-        .active-canvas { z-index: 3; cursor: crosshair; } /* Canlı çizim (Kasmayı önleyen katman) */
+        .base-canvas { z-index: 2; }
+        .active-canvas { z-index: 3; cursor: crosshair; }
         
         .template-layer {
             position: absolute;
-            top: 0;
+            top: 60px;
             left: 0;
             width: 100%;
-            height: 100%;
+            height: calc(100% - 60px);
             z-index: 1;
             pointer-events: none;
-            background-size: 100% 100%;
         }
+
         .hidden-view { display: none !important; }
         .tool-active {
             background-color: #2563eb !important;
@@ -55,12 +76,25 @@
         .scroll-container {
             height: calc(100vh - 64px);
             overflow-y: auto;
-            scroll-behavior: smooth;
-            padding-bottom: 200px;
+            padding-bottom: 400px;
         }
         .modal-overlay {
             background: rgba(15, 23, 42, 0.6);
             backdrop-filter: blur(8px);
+        }
+
+        /* Zoom Kontrolleri */
+        .zoom-controls {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            background: white;
+            padding: 8px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 8px;
+            z-index: 100;
         }
     </style>
 </head>
@@ -93,6 +127,7 @@
             <div class="flex items-center gap-3">
                 <button onclick="showHome()" class="p-2 hover:bg-slate-100 rounded-full transition"><i data-lucide="arrow-left"></i></button>
                 <h2 id="current-notebook-title" class="font-bold text-slate-800 border-l pl-4 truncate max-w-[150px]">Defter</h2>
+                <span id="auto-save-indicator" class="text-[10px] text-slate-400 italic">Otomatik kayıt açık</span>
             </div>
 
             <!-- Araç Paneli -->
@@ -117,14 +152,14 @@
         </header>
 
         <div class="scroll-container flex flex-col items-center py-6" id="editor-scroll">
-            <div id="page-list" class="flex flex-col gap-6"></div>
+            <div id="page-list" class="flex flex-col gap-6 origin-top"></div>
             <button onclick="addNewPage()" class="my-10 bg-white text-slate-600 px-12 py-5 rounded-3xl shadow-xl border hover:text-blue-600 transition flex items-center gap-3 font-bold">
                 <i data-lucide="plus-circle"></i> Yeni Sayfa Ekle
             </button>
         </div>
 
         <!-- Renk ve Kalınlık -->
-        <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-xl px-8 py-4 rounded-[2.5rem] shadow-2xl border flex items-center gap-8 z-50">
+        <div class="fixed bottom-8 right-8 bg-white/95 backdrop-blur-xl px-8 py-4 rounded-[2.5rem] shadow-2xl border flex items-center gap-8 z-50">
             <div class="flex gap-2.5">
                 <button onclick="setColor('#0f172a')" class="w-9 h-9 rounded-full bg-slate-900 border-4 border-white shadow-md"></button>
                 <button onclick="setColor('#2563eb')" class="w-9 h-9 rounded-full bg-blue-600 border-4 border-white shadow-md"></button>
@@ -132,9 +167,17 @@
                 <button onclick="setColor('#059669')" class="w-9 h-9 rounded-full bg-emerald-600 border-4 border-white shadow-md"></button>
             </div>
             <div class="flex items-center gap-4 border-l pl-8">
-                <div class="flex flex-col"><span id="brush-label" class="text-sm font-black text-blue-600">3</span></div>
+                <span id="brush-label" class="text-sm font-black text-blue-600">3</span>
                 <input type="range" min="1" max="40" value="3" oninput="updateBrushWidth(this.value)" class="w-40 accent-blue-600">
             </div>
+        </div>
+
+        <!-- Zoom Kontrolleri -->
+        <div class="zoom-controls">
+            <button onclick="changeZoom(-0.1)" class="p-2 hover:bg-slate-100 rounded-lg"><i data-lucide="minus"></i></button>
+            <span id="zoom-val" class="font-bold text-slate-600 px-2 min-w-[50px] text-center">100%</span>
+            <button onclick="changeZoom(0.1)" class="p-2 hover:bg-slate-100 rounded-lg"><i data-lucide="plus"></i></button>
+            <button onclick="setZoom(1.0)" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><i data-lucide="maximize"></i></button>
         </div>
     </div>
 
@@ -148,11 +191,22 @@
             <div class="space-y-8">
                 <input type="text" id="nb-title-input" placeholder="Defter Başlığı..." class="w-full px-6 py-4 rounded-2xl border-2 bg-slate-50 outline-none focus:border-blue-500 text-xl font-medium transition">
                 <div>
-                    <label class="block text-xs font-black text-slate-400 uppercase mb-4 tracking-widest">Sayfa Şablonu Seçin</label>
+                    <label class="block text-xs font-black text-slate-400 uppercase mb-4 tracking-widest">Sistem Şablonları</label>
                     <div class="grid grid-cols-2 gap-4 max-h-[350px] overflow-y-auto pr-2" id="template-options">
                         <button onclick="selectTemplate('blank', '', this)" class="template-btn border-4 border-blue-600 rounded-3xl p-5 text-left bg-blue-50">
-                            <div class="w-full h-24 bg-white border rounded-xl mb-2 flex items-center justify-center"><i data-lucide="file" class="text-slate-200"></i></div>
                             <span class="font-bold text-blue-600">Düz Beyaz</span>
+                        </button>
+                        <button onclick="selectTemplate('grid', 'grid', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50">
+                            <span class="font-bold text-slate-700">Kareli</span>
+                        </button>
+                        <button onclick="selectTemplate('lined', 'lined', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50">
+                            <span class="font-bold text-slate-700">Çizgili</span>
+                        </button>
+                        <button onclick="selectTemplate('grid-split', 'grid-split', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50">
+                            <span class="font-bold text-slate-700">Kareli İkiye Bölünmüş</span>
+                        </button>
+                        <button onclick="selectTemplate('lined-split', 'lined-split', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50">
+                            <span class="font-bold text-slate-700">Çizgili İkiye Bölünmüş</span>
                         </button>
                     </div>
                 </div>
@@ -171,13 +225,23 @@
         let notebooks = [], activeNotebook = null;
         let selectedTemplate = { id: 'blank', url: '' };
         let currentTool = 'ballpoint', currentColor = '#0f172a', currentWidth = 3;
-        let isDrawing = false, lastX, lastY, currentPath = [], templatesLoaded = false;
+        let isDrawing = false, lastX = 0, lastY = 0, currentPath = [], zoomLevel = 1.0;
         let lassoSelectedPaths = [], lassoStartPos = null, isMoving = false;
+        let activeCanvas = null, activeCtx = null;
+
+        // --- ZOOM ---
+        function updateZoom() {
+            const pageList = document.getElementById('page-list');
+            if (pageList) {
+                pageList.style.transform = `scale(${zoomLevel})`;
+                document.getElementById('zoom-val').innerText = `${Math.round(zoomLevel * 100)}%`;
+            }
+        }
+        function changeZoom(delta) { zoomLevel = Math.max(0.5, Math.min(3.0, zoomLevel + delta)); updateZoom(); }
+        function setZoom(val) { zoomLevel = val; updateZoom(); }
 
         // --- DASHBOARD ---
         async function loadNotebooks() {
-            const grid = document.getElementById('notebook-grid');
-            grid.innerHTML = '<div class="col-span-full text-center py-10 text-slate-400 animate-pulse font-bold">Veriler Getiriliyor...</div>';
             try {
                 const { data } = await supabaseClient.from('notebooks').select('*').order('updated_at', { ascending: false });
                 notebooks = data || [];
@@ -187,6 +251,7 @@
 
         function renderNotebookList() {
             const grid = document.getElementById('notebook-grid');
+            if (!grid) return;
             grid.innerHTML = '';
             notebooks.forEach(nb => {
                 const card = document.createElement('div');
@@ -200,33 +265,8 @@
             lucide.createIcons();
         }
 
-        // --- ŞABLONLAR ---
-        async function fetchTemplates() {
-            if (templatesLoaded) return;
-            const container = document.getElementById('template-options');
-            try {
-                const { data } = await supabaseClient.storage.from('fields').list();
-                if (data) {
-                    data.forEach(file => {
-                        if (file.name.startsWith('.') || file.name.includes('placeholder')) return;
-                        const { data: { publicUrl } } = supabaseClient.storage.from('fields').getPublicUrl(file.name);
-                        const btn = document.createElement('button');
-                        btn.className = "template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50 transition hover:border-slate-200";
-                        btn.onclick = () => selectTemplate(file.id, publicUrl, btn);
-                        btn.innerHTML = `<div class="w-full h-24 border rounded-xl mb-2 bg-cover bg-center" style="background-image: url('${publicUrl}')"></div>
-                            <span class="font-bold text-slate-700 text-xs truncate block">${file.name.split('.')[0]}</span>`;
-                        container.appendChild(btn);
-                    });
-                    templatesLoaded = true;
-                }
-            } catch (err) { console.error(err); }
-        }
-
         // --- MODAL ---
-        function openCreateModal() { 
-            document.getElementById('create-modal').classList.remove('hidden-view'); 
-            fetchTemplates(); 
-        }
+        function openCreateModal() { document.getElementById('create-modal').classList.remove('hidden-view'); }
         function closeCreateModal() { document.getElementById('create-modal').classList.add('hidden-view'); }
         function selectTemplate(id, url, el) {
             selectedTemplate = { id, url };
@@ -236,7 +276,12 @@
 
         async function confirmCreate() {
             const title = document.getElementById('nb-title-input').value.trim() || "Yeni Defter";
-            const newNb = { id: Date.now(), title, pages: [{ paths: [], template: selectedTemplate.url }], updated_at: new Date().toISOString() };
+            const newNb = { id: Date.now(), title, pages: [{ 
+                paths: [], 
+                template: selectedTemplate.url,
+                course: "",
+                date: new Date().toISOString().split('T')[0]
+            }], updated_at: new Date().toISOString() };
             notebooks.unshift(newNb);
             closeCreateModal();
             showEditor(newNb.id);
@@ -255,48 +300,95 @@
 
         function renderPages() {
             const list = document.getElementById('page-list');
+            if (!list) return;
             list.innerHTML = '';
             activeNotebook.pages.forEach((page, idx) => {
                 const container = document.createElement('div');
                 container.className = 'a4-page-container';
                 
-                const template = document.createElement('div');
+                const header = document.createElement('div');
+                header.className = 'page-header';
+                header.innerHTML = `
+                    <input type="text" placeholder="Ders Adı" value="${page.course || ''}" onchange="updatePageInfo(${idx}, 'course', this.value)">
+                    <input type="date" value="${page.date || ''}" onchange="updatePageInfo(${idx}, 'date', this.value)">
+                `;
+
+                const template = document.createElement('canvas');
+                template.width = 800; template.height = 1131 - 60;
                 template.className = 'template-layer';
-                if (page.template) template.style.backgroundImage = `url('${page.template}')`;
+                drawTemplate(template, page.template);
                 
                 const baseCanvas = document.createElement('canvas');
-                baseCanvas.width = 800; baseCanvas.height = 1131;
+                baseCanvas.width = 800; baseCanvas.height = 1131 - 60;
                 baseCanvas.className = 'base-canvas';
                 
-                const activeCanvas = document.createElement('canvas');
-                activeCanvas.width = 800; activeCanvas.height = 1131;
-                activeCanvas.className = 'active-canvas';
-                activeCanvas.dataset.index = idx;
+                const actCnv = document.createElement('canvas');
+                actCnv.width = 800; actCnv.height = 1131 - 60;
+                actCnv.className = 'active-canvas';
+                actCnv.dataset.index = idx;
                 
-                activeCanvas.addEventListener('pointerdown', startAction);
-                activeCanvas.addEventListener('pointermove', doAction);
-                activeCanvas.addEventListener('pointerup', endAction);
+                actCnv.addEventListener('pointerdown', startAction);
+                actCnv.addEventListener('pointermove', doAction);
+                actCnv.addEventListener('pointerup', endAction);
+                actCnv.addEventListener('pointerleave', endAction);
                 
-                container.append(template, baseCanvas, activeCanvas);
+                container.append(header, template, baseCanvas, actCnv);
                 list.appendChild(container);
                 drawContent(baseCanvas, page.paths);
             });
         }
 
+        function updatePageInfo(idx, field, val) {
+            if (activeNotebook && activeNotebook.pages[idx]) {
+                activeNotebook.pages[idx][field] = val;
+            }
+        }
+
+        function drawTemplate(canvas, type) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 800, 1131);
+            if (!type) return;
+
+            ctx.strokeStyle = "#e2e8f0";
+            ctx.lineWidth = 1;
+
+            if (type.includes('grid')) {
+                for (let x = 0; x <= 800; x += 20) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 1131); ctx.stroke(); }
+                for (let y = 0; y <= 1131; y += 20) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(800, y); ctx.stroke(); }
+            } else if (type.includes('lined')) {
+                for (let y = 30; y <= 1131; y += 25) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(800, y); ctx.stroke(); }
+            }
+
+            if (type.includes('split')) {
+                ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(400, 0); ctx.lineTo(400, 1131); ctx.stroke();
+            }
+        }
+
         function addNewPage() {
-            const last = activeNotebook.pages[activeNotebook.pages.length-1]?.template || '';
-            activeNotebook.pages.push({ paths: [], template: last });
+            if (!activeNotebook) return;
+            const last = activeNotebook.pages[activeNotebook.pages.length-1];
+            activeNotebook.pages.push({ 
+                paths: [], 
+                template: last?.template || '', 
+                course: last?.course || "",
+                date: new Date().toISOString().split('T')[0]
+            });
             renderPages();
         }
 
-        // --- PERFORMANSLI ÇİZİM SİSTEMİ ---
+        // --- ÇİZİM ---
         function startAction(e) {
+            // Avuç içi algılamama: S-Pen dışı touch'ı engelle
             if (e.pointerType === 'touch' && e.buttons !== 1) return;
-            isDrawing = true;
+
             activeCanvas = e.target;
             const idx = activeCanvas.dataset.index;
             const pos = getPos(e);
+            
+            // Fix: Başlangıç koordinatlarını hemen ayarla
             lastX = pos.x; lastY = pos.y;
+            isDrawing = true;
             currentPath = [{ x: pos.x, y: pos.y }];
             
             activeCtx = activeCanvas.getContext('2d');
@@ -304,8 +396,8 @@
 
             if (currentTool === 'lasso') {
                 lassoStartPos = pos;
-                // Eğer daha önce seçilmiş bir şey varsa ve içine tıklandıysa taşımaya geç
-                const hit = lassoSelectedPaths.length > 0;
+                // Daha önce bir seçim yapılmış mı?
+                const hit = lassoSelectedPaths.length > 0 && isInsideLasso(pos);
                 if (hit) isMoving = true;
                 else {
                     lassoSelectedPaths = [];
@@ -314,7 +406,19 @@
             } else if (currentTool === 'eraser_stroke') {
                 strokeErase(pos.x, pos.y, idx);
                 isDrawing = false;
+            } else if (currentTool.startsWith('shape_')) {
+                lassoStartPos = pos; // Şekil başlangıcı için lassoStartPos kullanıyoruz
             }
+        }
+
+        function isInsideLasso(pos) {
+            if (lassoSelectedPaths.length === 0) return false;
+            const pts = lassoSelectedPaths.flatMap(p => p.points || [{x: p.x, y: p.y}]);
+            const minX = Math.min(...pts.map(p => p.x));
+            const maxX = Math.max(...pts.map(p => p.x));
+            const minY = Math.min(...pts.map(p => p.y));
+            const maxY = Math.max(...pts.map(p => p.y));
+            return pos.x >= minX - 15 && pos.x <= maxX + 15 && pos.y >= minY - 15 && pos.y <= maxY + 15;
         }
 
         function doAction(e) {
@@ -327,24 +431,29 @@
                     const dx = pos.x - lastX;
                     const dy = pos.y - lastY;
                     lassoSelectedPaths.forEach(p => {
-                        if (p.points) p.points.forEach(pt => { pt.x += dx; pt.y += dy; });
-                        if (p.x !== undefined) { p.x += dx; p.y += dy; }
+                        if (p.points) {
+                            p.points.forEach(pt => { pt.x += dx; pt.y += dy; });
+                        } else {
+                            p.x += dx; p.y += dy;
+                        }
                     });
-                    const baseCnv = activeCanvas.parentElement.querySelector('.base-canvas');
-                    drawContent(baseCnv, activeNotebook.pages[idx].paths);
-                    drawSelectionOverlay();
+                    drawPageContent(idx);
+                    renderLassoHighlight();
                 } else {
                     activeCtx.clearRect(0,0,800,1131);
                     activeCtx.setLineDash([5, 5]);
                     activeCtx.strokeStyle = '#3b82f6';
-                    activeCtx.strokeRect(lassoStartPos.x, lassoStartPos.y, pos.x - lassoStartPos.x, pos.y - lassoStartPos.y);
+                    if (lassoStartPos) {
+                        activeCtx.strokeRect(lassoStartPos.x, lassoStartPos.y, pos.x - lassoStartPos.x, pos.y - lassoStartPos.y);
+                    }
                     activeCtx.setLineDash([]);
                 }
             } else if (currentTool.startsWith('shape_')) {
                 activeCtx.clearRect(0,0,800,1131);
-                drawShapePreview(activeCtx, lassoStartPos || {x:lastX,y:lastY}, pos);
+                if (lassoStartPos) {
+                    drawShapePreview(activeCtx, lassoStartPos, pos);
+                }
             } else {
-                // Kalem çizimi: Sadece aktif katmana çiz, kasmasın.
                 activeCtx.strokeStyle = currentColor;
                 activeCtx.lineWidth = currentWidth;
                 activeCtx.globalAlpha = currentTool === 'highlighter' ? 0.3 : (currentTool === 'pencil' ? 0.5 : 1);
@@ -363,35 +472,97 @@
             const pos = getPos(e);
 
             if (currentTool === 'lasso' && !isMoving) {
-                const rect = { x1: Math.min(lassoStartPos.x, pos.x), y1: Math.min(lassoStartPos.y, pos.y), x2: Math.max(lassoStartPos.x, pos.x), y2: Math.max(lassoStartPos.y, pos.y) };
-                lassoSelectedPaths = activeNotebook.pages[idx].paths.filter(p => {
-                    if (p.points) return p.points.some(pt => pt.x > rect.x1 && pt.x < rect.x2 && pt.y > rect.y1 && pt.y < rect.y2);
-                    return p.x > rect.x1 && p.x < rect.x2 && p.y > rect.y1 && p.y < rect.y2;
-                });
-                drawSelectionOverlay();
+                if (lassoStartPos) {
+                    const rect = { 
+                        x1: Math.min(lassoStartPos.x, pos.x), 
+                        y1: Math.min(lassoStartPos.y, pos.y), 
+                        x2: Math.max(lassoStartPos.x, pos.x), 
+                        y2: Math.max(lassoStartPos.y, pos.y) 
+                    };
+                    lassoSelectedPaths = activeNotebook.pages[idx].paths.filter(p => {
+                        const pts = p.points || [{x:p.x, y:p.y}];
+                        return pts.some(pt => pt.x > rect.x1 && pt.x < rect.x2 && pt.y > rect.y1 && pt.y < rect.y2);
+                    });
+                    renderLassoHighlight();
+                }
             } else if (currentTool.startsWith('shape_')) {
-                const type = currentTool.split('_')[1];
-                activeNotebook.pages[idx].paths.push({ type, x: lassoStartPos.x, y: lassoStartPos.y, w: pos.x - lassoStartPos.x, h: pos.y - lassoStartPos.y, color: currentColor, width: currentWidth });
-                finalizePage(idx);
+                if (lassoStartPos) {
+                    const type = currentTool.split('_')[1];
+                    activeNotebook.pages[idx].paths.push({ 
+                        type, 
+                        x: lassoStartPos.x, 
+                        y: lassoStartPos.y, 
+                        w: pos.x - lassoStartPos.x, 
+                        h: pos.y - lassoStartPos.y, 
+                        color: currentColor, 
+                        width: currentWidth 
+                    });
+                    drawPageContent(idx);
+                }
             } else if (!currentTool.includes('lasso') && currentPath.length > 1) {
-                activeNotebook.pages[idx].paths.push({ tool: currentTool, color: currentColor, width: currentWidth, points: [...currentPath] });
-                finalizePage(idx);
+                activeNotebook.pages[idx].paths.push({ 
+                    tool: currentTool, 
+                    color: currentColor, 
+                    width: currentWidth, 
+                    points: [...currentPath] 
+                });
+                drawPageContent(idx);
             }
             
-            isDrawing = false; isMoving = false;
+            isDrawing = false; 
+            isMoving = false;
+            lassoStartPos = null; // Reset start pos to avoid null errors
         }
 
-        function finalizePage(idx) {
-            const baseCnv = document.querySelectorAll('.base-canvas')[idx];
-            const actCnv = document.querySelectorAll('.active-canvas')[idx];
-            drawContent(baseCnv, activeNotebook.pages[idx].paths);
-            actCnv.getContext('2d').clearRect(0,0,800,1131);
+        function renderLassoHighlight() {
+            if (!activeCtx) return;
+            activeCtx.clearRect(0,0,800,1131);
+            if (lassoSelectedPaths.length === 0) return;
+            
+            activeCtx.save();
+            activeCtx.shadowBlur = 15;
+            activeCtx.shadowColor = 'rgba(37, 99, 235, 0.6)';
+            activeCtx.strokeStyle = 'rgba(37, 99, 235, 0.4)';
+            activeCtx.lineWidth = 8;
+            
+            lassoSelectedPaths.forEach(p => {
+                activeCtx.beginPath();
+                if (p.points && p.points.length > 0) {
+                    activeCtx.moveTo(p.points[0].x, p.points[0].y);
+                    p.points.forEach(pt => activeCtx.lineTo(pt.x, pt.y));
+                } else if (p.type === 'rect') {
+                    activeCtx.rect(p.x, p.y, p.w, p.h);
+                } else if (p.type === 'circle') {
+                    activeCtx.arc(p.x, p.y, Math.hypot(p.w, p.h), 0, Math.PI*2);
+                } else if (p.type === 'coord') {
+                    activeCtx.moveTo(p.x-100, p.y); activeCtx.lineTo(p.x+100, p.y);
+                    activeCtx.moveTo(p.x, p.y-100); activeCtx.lineTo(p.x, p.y+100);
+                }
+                activeCtx.stroke();
+            });
+            activeCtx.restore();
+        }
+
+        function drawPageContent(idx) {
+            const containers = document.querySelectorAll('.a4-page-container');
+            if (containers[idx]) {
+                const baseCnv = containers[idx].querySelector('.base-canvas');
+                const actCnv = containers[idx].querySelector('.active-canvas');
+                if (baseCnv && activeNotebook && activeNotebook.pages[idx]) {
+                    drawContent(baseCnv, activeNotebook.pages[idx].paths);
+                }
+                if (actCnv) {
+                    actCnv.getContext('2d').clearRect(0,0,800,1131);
+                }
+            }
         }
 
         function drawShapePreview(ctx, start, end) {
-            ctx.strokeStyle = currentColor; ctx.lineWidth = currentWidth;
-            if (currentTool === 'shape_rect') ctx.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
-            else if (currentTool === 'shape_circle') {
+            ctx.strokeStyle = currentColor; 
+            ctx.lineWidth = currentWidth;
+            if (currentTool === 'shape_rect') {
+                ctx.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
+            } else if (currentTool === 'shape_circle') {
                 ctx.beginPath();
                 const r = Math.hypot(end.x - start.x, end.y - start.y);
                 ctx.arc(start.x, start.y, r, 0, Math.PI * 2);
@@ -399,26 +570,26 @@
             }
         }
 
-        function drawSelectionOverlay() {
-            activeCtx.clearRect(0,0,800,1131);
-            if (lassoSelectedPaths.length === 0) return;
-            activeCtx.strokeStyle = '#3b82f6'; activeCtx.lineWidth = 2;
-            activeCtx.setLineDash([5, 5]);
-            activeCtx.strokeRect(lastX-10, lastY-10, 20, 20); // Dummy indicator
-            activeCtx.setLineDash([]);
-        }
-
         function drawContent(canvas, paths) {
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             paths.forEach(p => {
+                ctx.save();
                 ctx.beginPath();
                 ctx.strokeStyle = p.color || currentColor;
                 ctx.lineWidth = p.width || 2;
-                if (p.type === 'rect') ctx.strokeRect(p.x, p.y, p.w, p.h);
-                else if (p.type === 'circle') { ctx.beginPath(); ctx.arc(p.x, p.y, Math.hypot(p.w, p.h), 0, Math.PI*2); ctx.stroke(); }
-                else if (p.type === 'coord') drawCoord(ctx, p.x, p.y);
-                else {
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                if (p.type === 'rect') {
+                    ctx.strokeRect(p.x, p.y, p.w, p.h);
+                } else if (p.type === 'circle') {
+                    ctx.beginPath(); 
+                    ctx.arc(p.x, p.y, Math.hypot(p.w, p.h), 0, Math.PI*2); 
+                    ctx.stroke();
+                } else if (p.type === 'coord') {
+                    drawCoord(ctx, p.x, p.y);
+                } else {
                     ctx.globalAlpha = p.tool === 'highlighter' ? 0.3 : (p.tool === 'pencil' ? 0.5 : 1);
                     if (p.points?.length > 0) {
                         ctx.moveTo(p.points[0].x, p.points[0].y);
@@ -426,31 +597,47 @@
                         ctx.stroke();
                     }
                 }
-                ctx.globalAlpha = 1;
+                ctx.restore();
             });
         }
 
         // --- YARDIMCI ---
-        function getPos(e) { const r = e.target.getBoundingClientRect(); return { x: (e.clientX - r.left) * (800 / r.width), y: (e.clientY - r.top) * (1131 / r.height) }; }
-        function setTool(t) { currentTool = t; document.querySelectorAll('[id^="btn-"]').forEach(b => b.classList.remove('tool-active')); document.getElementById('btn-' + t).classList.add('tool-active'); }
+        function getPos(e) { 
+            const r = e.target.getBoundingClientRect(); 
+            // Zoom etkisini koordinatlarda tersine çevir
+            return { 
+                x: (e.clientX - r.left) * (800 / r.width), 
+                y: (e.clientY - r.top) * (1131 / r.height) 
+            }; 
+        }
+        function setTool(t) { 
+            currentTool = t; 
+            document.querySelectorAll('[id^="btn-"]').forEach(b => b.classList.remove('tool-active')); 
+            const btn = document.getElementById('btn-' + t);
+            if (btn) btn.classList.add('tool-active'); 
+        }
         function setColor(c) { currentColor = c; }
-        function updateBrushWidth(w) { currentWidth = w; document.getElementById('brush-label').innerText = w; }
+        function updateBrushWidth(w) { currentWidth = parseInt(w); document.getElementById('brush-label').innerText = w; }
         
         function strokeErase(x, y, idx) {
-            activeNotebook.pages[idx].paths = activeNotebook.pages[idx].paths.filter(p => {
-                if (!p.points) return Math.hypot(p.x - x, p.y - y) > 30;
-                return !p.points.some(pt => Math.hypot(pt.x - x, pt.y - y) < 20);
-            });
-            finalizePage(idx);
+            if (activeNotebook && activeNotebook.pages[idx]) {
+                activeNotebook.pages[idx].paths = activeNotebook.pages[idx].paths.filter(p => {
+                    const pts = p.points || [{x:p.x, y:p.y}];
+                    return !pts.some(pt => Math.hypot(pt.x - x, pt.y - y) < 20);
+                });
+                drawPageContent(idx);
+            }
         }
 
         function addCoord() {
+            if (!activeNotebook) return;
             const idx = activeNotebook.pages.length - 1;
             activeNotebook.pages[idx].paths.push({ type: 'coord', x: 400, y: 550, color: '#94a3b8', width: 2 });
-            finalizePage(idx);
+            drawPageContent(idx);
         }
 
         function drawCoord(ctx, x, y) {
+            ctx.beginPath();
             ctx.moveTo(x-180, y); ctx.lineTo(x+180, y);
             ctx.moveTo(x, y-180); ctx.lineTo(x, y+180);
             ctx.stroke();
@@ -458,19 +645,36 @@
         }
 
         function undo() {
+            if (!activeNotebook) return;
             const idx = activeNotebook.pages.length - 1;
-            activeNotebook.pages[idx].paths.pop();
-            finalizePage(idx);
+            if (activeNotebook.pages[idx].paths.length > 0) {
+                activeNotebook.pages[idx].paths.pop();
+                drawPageContent(idx);
+            }
         }
 
-        async function saveNotebookToSupabase() {
+        async function saveNotebookToSupabase(isAuto = false) {
+            if (!activeNotebook) return;
             const btn = document.getElementById('save-btn');
-            btn.innerText = "Kaydediliyor...";
+            if(!isAuto) btn.innerText = "Kaydediliyor...";
+            
             activeNotebook.updated_at = new Date().toISOString();
             await supabaseClient.from('notebooks').upsert(activeNotebook);
-            btn.innerHTML = '<i data-lucide="cloud-upload"></i> Kaydet';
-            lucide.createIcons();
-            showMessage("Başarıyla kaydedildi!");
+            
+            if(!isAuto) {
+                btn.innerHTML = '<i data-lucide="cloud-upload" class="w-4 h-4"></i> Kaydet';
+                lucide.createIcons();
+                showMessage("Başarıyla kaydedildi!");
+            } else {
+                console.log("Otomatik kayıt başarılı");
+            }
+        }
+
+        async function deleteNotebook(id) {
+            if(!confirm("Bu defteri tamamen silmek üzeresin?")) return;
+            notebooks = notebooks.filter(n => n.id !== id);
+            renderNotebookList();
+            await supabaseClient.from('notebooks').delete().match({ id });
         }
 
         function showMessage(t) {
@@ -478,6 +682,13 @@
             msg.className = "fixed top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-2 rounded-full z-[100] animate-bounce";
             msg.innerText = t; document.body.appendChild(msg); setTimeout(() => msg.remove(), 2000);
         }
+
+        // --- OTOMATİK KAYIT SİSTEMİ (5 DAKİKA) ---
+        setInterval(() => {
+            if (activeNotebook) {
+                saveNotebookToSupabase(true);
+            }
+        }, 5 * 60 * 1000);
 
         loadNotebooks();
     </script>
