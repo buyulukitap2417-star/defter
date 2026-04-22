@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MATOTA Defterim - Pro Performance v2</title>
+    <title>MATOTA Defterim - Pro Performance v3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -48,7 +48,12 @@
             font-weight: 700;
             color: #1e293b;
             outline: none;
-            width: 45%;
+            width: 40%;
+        }
+        .page-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
         canvas {
             position: absolute;
@@ -78,6 +83,10 @@
             height: calc(100vh - 64px);
             overflow-y: auto;
             padding-bottom: 500px;
+            transition: overflow 0.2s ease;
+        }
+        .scroll-locked {
+            overflow-y: hidden !important;
         }
         .modal-overlay {
             background: rgba(15, 23, 42, 0.6);
@@ -95,10 +104,6 @@
             gap: 8px;
             z-index: 100;
         }
-        .color-btn {
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        .color-btn:active { transform: scale(0.9); }
     </style>
 </head>
 <body>
@@ -110,10 +115,10 @@
                 <div class="bg-blue-600 p-2.5 rounded-2xl text-white shadow-lg">
                     <i data-lucide="book-marked" class="w-6 h-6"></i>
                 </div>
-                <h1 class="text-2xl font-black text-slate-800">MATOTA <span class="text-blue-600">Defterim</span></h1>
+                <h1 class="text-2xl font-black text-slate-800 tracking-tight">MATOTA <span class="text-blue-600">Defterim</span></h1>
             </div>
             <div class="flex items-center gap-4">
-                <button onclick="loadNotebooks()" class="p-2.5 text-slate-400 hover:text-blue-600"><i data-lucide="refresh-cw"></i></button>
+                <button onclick="loadNotebooks()" class="p-2.5 text-slate-400 hover:text-blue-600 transition"><i data-lucide="refresh-cw"></i></button>
                 <button onclick="openCreateModal()" class="bg-blue-600 text-white px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-blue-700 shadow-xl font-bold transition-all">
                     <i data-lucide="plus"></i> Yeni Defter
                 </button>
@@ -128,11 +133,15 @@
     <div id="editor-view" class="h-screen w-full flex flex-col hidden-view bg-slate-200">
         <header class="h-16 bg-white border-b flex items-center justify-between px-4 z-50 shadow-sm">
             <div class="flex items-center gap-3">
-                <button onclick="showHome()" class="p-2 hover:bg-slate-100 rounded-full"><i data-lucide="arrow-left"></i></button>
+                <button onclick="showHome()" class="p-2 hover:bg-slate-100 rounded-full transition"><i data-lucide="arrow-left"></i></button>
                 <h2 id="current-notebook-title" class="font-bold text-slate-800 border-l pl-4 truncate max-w-[150px]">Defter</h2>
-                <span id="auto-save-status" class="text-[10px] text-emerald-500 font-bold hidden">Kaydedildi</span>
+                <div class="h-6 w-px bg-slate-200 mx-2"></div>
+                <button id="btn-scroll-lock" onclick="toggleScrollLock()" class="p-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition" title="Yazım Kilidi (Kaydırmayı Durdur)">
+                    <i data-lucide="unlock"></i>
+                </button>
             </div>
 
+            <!-- Araç Çubuğu -->
             <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border">
                 <button onclick="setTool('ballpoint')" id="btn-ballpoint" class="p-2 rounded-xl tool-active" title="Kalem"><i data-lucide="pen-tool"></i></button>
                 <button onclick="setTool('pencil')" id="btn-pencil" class="p-2 rounded-xl hover:bg-white" title="Kurşun Kalem"><i data-lucide="pencil"></i></button>
@@ -140,7 +149,7 @@
                 <button onclick="setTool('lasso')" id="btn-lasso" class="p-2 rounded-xl hover:bg-white" title="Halat (Taşıma)"><i data-lucide="lasso"></i></button>
                 
                 <div class="relative group">
-                    <button id="btn-shapes" class="p-2 rounded-xl hover:bg-white"><i data-lucide="shapes"></i></button>
+                    <button class="p-2 rounded-xl hover:bg-white"><i data-lucide="shapes"></i></button>
                     <div class="absolute top-full left-0 hidden group-hover:flex flex-col bg-white border rounded-xl shadow-xl z-[300]">
                         <button onclick="setTool('shape_rect')" class="p-2 hover:bg-slate-50 border-b"><i data-lucide="square"></i></button>
                         <button onclick="setTool('shape_circle')" class="p-2 hover:bg-slate-50 border-b"><i data-lucide="circle"></i></button>
@@ -151,7 +160,7 @@
                 <div class="w-px h-6 bg-slate-300 mx-1"></div>
 
                 <div class="relative group">
-                    <button id="btn-eraser" onclick="setTool('eraser_stroke')" class="p-2 rounded-xl hover:bg-white"><i data-lucide="eraser"></i></button>
+                    <button id="btn-eraser" onclick="setTool('eraser_stroke')" class="p-2 rounded-xl hover:bg-white" title="Silgi"><i data-lucide="eraser"></i></button>
                     <div class="absolute top-full left-0 hidden group-hover:flex flex-col bg-white border rounded-xl shadow-xl z-[300] min-w-[100px]">
                         <button onclick="setTool('eraser_stroke')" class="p-2 text-xs font-bold hover:bg-slate-50 border-b">Çizgi Silgi</button>
                         <button onclick="setTool('eraser_area')" class="p-2 text-xs font-bold hover:bg-slate-50">Alan Silgi</button>
@@ -160,15 +169,19 @@
             </div>
 
             <div class="flex items-center gap-2">
-                <button onclick="addCoord()" class="p-2 text-blue-600 bg-blue-50 rounded-xl"><i data-lucide="plus-square"></i></button>
+                <button onclick="addCoord()" class="p-2 text-blue-600 bg-blue-50 rounded-xl" title="Koordinat Sistemi"><i data-lucide="plus-square"></i></button>
                 <button onclick="undo()" class="p-2 hover:bg-slate-100 rounded-xl"><i data-lucide="undo-2"></i></button>
-                <button onclick="saveNotebookToSupabase()" class="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold shadow-lg shadow-blue-200">Kaydet</button>
+                <button onclick="saveNotebookToSupabase()" id="save-btn" class="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all">
+                    Kaydet
+                </button>
             </div>
         </header>
 
         <div class="scroll-container flex flex-col items-center py-6" id="editor-scroll">
             <div id="page-list" class="flex flex-col gap-6 origin-top"></div>
-            <button onclick="addNewPage()" class="my-10 bg-white text-slate-600 px-12 py-5 rounded-3xl shadow-xl border hover:text-blue-600 font-bold">Yeni Sayfa Ekle</button>
+            <button onclick="addNewPage()" class="my-10 bg-white text-slate-600 px-12 py-5 rounded-3xl shadow-xl border hover:text-blue-600 font-bold transition-all">
+                Yeni Sayfa Ekle
+            </button>
         </div>
 
         <!-- Renk ve Kalınlık -->
@@ -185,6 +198,7 @@
             </div>
         </div>
 
+        <!-- Zoom Kontrolleri -->
         <div class="zoom-controls">
             <button onclick="changeZoom(-0.1)" class="p-2 hover:bg-slate-100 rounded-lg"><i data-lucide="minus"></i></button>
             <span id="zoom-val" class="font-bold text-slate-600 min-w-[50px] text-center">100%</span>
@@ -192,7 +206,21 @@
         </div>
     </div>
 
-    <!-- MODAL -->
+    <!-- ŞABLON DEĞİŞTİRME MODALI -->
+    <div id="template-modal" class="fixed inset-0 z-[200] modal-overlay flex items-center justify-center hidden-view">
+        <div class="bg-white w-full max-w-md rounded-[2rem] p-8 shadow-2xl">
+            <h3 class="text-2xl font-black mb-6">Şablon Değiştir</h3>
+            <div class="grid grid-cols-2 gap-4" id="template-change-options">
+                <button onclick="updateActivePageTemplate('blank')" class="p-4 border rounded-xl hover:bg-slate-50 font-bold">Düz Beyaz</button>
+                <button onclick="updateActivePageTemplate('grid')" class="p-4 border rounded-xl hover:bg-slate-50 font-bold">Kareli</button>
+                <button onclick="updateActivePageTemplate('lined')" class="p-4 border rounded-xl hover:bg-slate-50 font-bold">Çizgili</button>
+                <button onclick="updateActivePageTemplate('grid-split')" class="p-4 border rounded-xl hover:bg-slate-50 font-bold">Kareli İkiye Bölünmüş</button>
+            </div>
+            <button onclick="closeTemplateModal()" class="w-full mt-6 bg-slate-100 py-3 rounded-xl font-bold">Vazgeç</button>
+        </div>
+    </div>
+
+    <!-- YENİ DEFTER MODALI -->
     <div id="create-modal" class="fixed inset-0 z-[100] modal-overlay flex items-center justify-center hidden-view">
         <div class="bg-white w-full max-w-xl rounded-[2.5rem] p-10 shadow-2xl">
             <div class="flex justify-between items-center mb-8">
@@ -201,7 +229,7 @@
             </div>
             <div class="space-y-8">
                 <input type="text" id="nb-title-input" placeholder="Başlık..." class="w-full px-6 py-4 rounded-2xl border-2 bg-slate-50 outline-none focus:border-blue-500 text-xl font-medium">
-                <div class="grid grid-cols-2 gap-4" id="template-options">
+                <div class="grid grid-cols-2 gap-4" id="initial-template-options">
                     <button onclick="selectTemplate('blank', '', this)" class="template-btn border-4 border-blue-600 rounded-3xl p-5 text-left bg-blue-50">Düz Beyaz</button>
                     <button onclick="selectTemplate('grid', 'grid', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50">Kareli</button>
                 </div>
@@ -223,25 +251,48 @@
         let isDrawing = false, lastX = 0, lastY = 0, currentPath = [], zoomLevel = 1.0;
         let lassoSelectedPaths = [], lassoStartPos = null, isMoving = false;
         let activeCanvas = null, activeCtx = null;
+        let isScrollLocked = false;
+        let editingPageIndex = -1;
         
         let quickColors = JSON.parse(localStorage.getItem('matota_colors')) || ['#0f172a', '#2563eb', '#dc2626', '#059669', '#d97706'];
         let editingColorIndex = -1;
 
+        // --- SCROLL LOCK ---
+        function toggleScrollLock() {
+            isScrollLocked = !isScrollLocked;
+            const container = document.getElementById('editor-scroll');
+            const btn = document.getElementById('btn-scroll-lock');
+            
+            if (isScrollLocked) {
+                container.classList.add('scroll-locked');
+                btn.classList.add('bg-blue-600', 'text-white');
+                btn.classList.remove('bg-slate-100', 'text-slate-500');
+                btn.innerHTML = '<i data-lucide="lock"></i>';
+            } else {
+                container.classList.remove('scroll-locked');
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('bg-slate-100', 'text-slate-500');
+                btn.innerHTML = '<i data-lucide="unlock"></i>';
+            }
+            lucide.createIcons();
+            showMessage(isScrollLocked ? "Yazım Kilidi Aktif" : "Kaydırma Serbest");
+        }
+
         // --- RENK YÖNETİMİ ---
         function renderColors() {
             const container = document.getElementById('quick-colors');
+            if(!container) return;
             container.innerHTML = '';
             quickColors.forEach((color, index) => {
                 const btn = document.createElement('button');
                 btn.className = `color-btn w-9 h-9 rounded-full border-4 border-white shadow-md ring-2 transition-all ${currentColor === color ? 'ring-blue-500 scale-125' : 'ring-transparent'}`;
                 btn.style.backgroundColor = color;
-                
                 btn.onclick = () => { currentColor = color; renderColors(); };
                 
+                // Uzun basma tespiti
                 let timer;
-                btn.onmousedown = btn.ontouchstart = () => { timer = setTimeout(() => editColor(index), 600); };
-                btn.onmouseup = btn.ontouchend = () => clearTimeout(timer);
-                btn.oncontextmenu = (e) => { e.preventDefault(); editColor(index); };
+                btn.onmousedown = btn.ontouchstart = () => { timer = setTimeout(() => editColor(index), 700); };
+                btn.onmouseup = btn.ontouchend = btn.onmouseleave = () => clearTimeout(timer);
                 
                 container.appendChild(btn);
             });
@@ -249,7 +300,7 @@
         }
 
         function triggerColorPicker() {
-            if(quickColors.length >= 5) { showMessage("Max 5 renk."); return; }
+            if(quickColors.length >= 5) { showMessage("Max 5 renk yuvası."); return; }
             editingColorIndex = -1;
             document.getElementById('hidden-color-picker').click();
         }
@@ -289,7 +340,12 @@
             lucide.createIcons();
         }
 
-        function showHome() { document.getElementById('home-view').classList.remove('hidden-view'); document.getElementById('editor-view').classList.add('hidden-view'); loadNotebooks(); }
+        function showHome() { 
+            document.getElementById('home-view').classList.remove('hidden-view'); 
+            document.getElementById('editor-view').classList.add('hidden-view'); 
+            loadNotebooks(); 
+        }
+
         function showEditor(id) {
             activeNotebook = notebooks.find(n => n.id === id);
             document.getElementById('home-view').classList.add('hidden-view');
@@ -305,8 +361,17 @@
             activeNotebook.pages.forEach((page, idx) => {
                 const container = document.createElement('div');
                 container.className = 'a4-page-container';
-                container.innerHTML = `<div class="page-header"><input type="text" placeholder="Ders Adı" value="${page.course||''}" onchange="activeNotebook.pages[${idx}].course=this.value"><input type="date" value="${page.date||''}" onchange="activeNotebook.pages[${idx}].date=this.value"></div>`;
                 
+                const header = document.createElement('div');
+                header.className = 'page-header';
+                header.innerHTML = `
+                    <input type="text" placeholder="Ders Adı" value="${page.course||''}" onchange="activeNotebook.pages[${idx}].course=this.value">
+                    <div class="page-actions">
+                        <input type="date" class="text-xs font-medium text-slate-400" value="${page.date||''}" onchange="activeNotebook.pages[${idx}].date=this.value">
+                        <button onclick="openTemplateModal(${idx})" class="p-2 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="settings-2" class="w-4 h-4"></i></button>
+                    </div>
+                `;
+
                 const template = document.createElement('canvas');
                 template.width = 800; template.height = 1131 - 60;
                 template.className = 'template-layer';
@@ -326,27 +391,39 @@
                 actCnv.addEventListener('pointerup', endAction);
                 actCnv.addEventListener('pointerleave', endAction);
                 
-                container.append(template, baseCanvas, actCnv);
+                container.append(header, template, baseCanvas, actCnv);
                 list.appendChild(container);
                 drawContent(baseCanvas, page.paths);
             });
+            lucide.createIcons();
         }
 
         function drawTemplate(canvas, type) {
             const ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,800,1131);
+            if (!type) return;
             ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1;
-            if (type === 'grid') {
+            if (type.includes('grid')) {
                 for (let x = 0; x <= 800; x += 20) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 1131); ctx.stroke(); }
                 for (let y = 0; y <= 1131; y += 20) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(800, y); ctx.stroke(); }
+            } else if (type === 'lined') {
+                for (let y = 25; y <= 1131; y += 25) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(800, y); ctx.stroke(); }
+            }
+            if (type.includes('split')) {
+                ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(400, 0); ctx.lineTo(400, 1131); ctx.stroke();
             }
         }
 
         // --- AKSİYONLAR ---
         function startAction(e) {
+            // S-PEN Desteği: Kalem varken parmak dokunuşlarını kısıtla (Yazım Kilidi yokken bile kaleme öncelik ver)
             if (e.pointerType === 'touch' && e.buttons !== 1) return;
+            
             activeCanvas = e.target;
             const idx = activeCanvas.dataset.index;
             const pos = getPos(e);
+            
             lastX = pos.x; lastY = pos.y;
             isDrawing = true;
             currentPath = [{ x: pos.x, y: pos.y }];
@@ -452,7 +529,10 @@
             const r = currentWidth * 5;
             activeNotebook.pages[idx].paths = activeNotebook.pages[idx].paths.filter(p => {
                 if(p.points) return !p.points.some(pt => Math.hypot(pt.x-x, pt.y-y) < r);
-                return Math.hypot(p.x-x, p.y-y) > r && Math.hypot(p.x+(p.w||0)-x, p.y+(p.h||0)-y) > r;
+                // Şekil kontrolü: merkez ve köşe noktaları
+                const dist1 = Math.hypot(p.x-x, p.y-y);
+                const dist2 = Math.hypot(p.x+(p.w||0)-x, p.y+(p.h||0)-y);
+                return dist1 > r && dist2 > r;
             });
             drawPageContent(idx);
         }
@@ -494,6 +574,23 @@
             if(currentTool === 'shape_rect') ctx.strokeRect(s.x, s.y, e.x-s.x, e.y-s.y);
             else if(currentTool === 'shape_circle') { ctx.beginPath(); ctx.arc(s.x, s.y, Math.hypot(e.x-s.x, e.y-s.y), 0, Math.PI*2); ctx.stroke(); }
             else if(currentTool === 'shape_triangle') { ctx.beginPath(); ctx.moveTo(s.x+(e.x-s.x)/2, s.y); ctx.lineTo(s.x, e.y); ctx.lineTo(e.x, e.y); ctx.closePath(); ctx.stroke(); }
+        }
+
+        // --- ŞABLON DEĞİŞTİRME ---
+        function openTemplateModal(idx) {
+            editingPageIndex = idx;
+            document.getElementById('template-modal').classList.remove('hidden-view');
+        }
+        function closeTemplateModal() {
+            document.getElementById('template-modal').classList.add('hidden-view');
+        }
+        function updateActivePageTemplate(type) {
+            if (editingPageIndex > -1 && activeNotebook) {
+                activeNotebook.pages[editingPageIndex].template = type;
+                renderPages();
+                closeTemplateModal();
+                saveNotebookToSupabase();
+            }
         }
 
         // --- YARDIMCI ---
