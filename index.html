@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MATOTA Defterim - Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --a4-ratio: 1.414;
+            --a4-width: 800px;
+        }
+        body {
+            touch-action: none;
+            background-color: #f1f5f9;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        .a4-page-container {
+            width: var(--a4-width);
+            height: calc(var(--a4-width) * var(--a4-ratio));
+            background: white;
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
+            margin: 30px auto;
+            position: relative;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 2;
+            cursor: crosshair;
+        }
+        .template-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+        }
+        /* Flex ve hidden çakışmasını önlemek için important eklendi */
+        .hidden-view { display: none !important; }
+        
+        .tool-active {
+            background-color: #2563eb !important;
+            color: white !important;
+        }
+        .scroll-container {
+            height: calc(100vh - 64px);
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            padding-bottom: 200px;
+        }
+        .modal-overlay {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(8px);
+        }
+        .scale-in {
+            animation: scaleIn 0.2s ease-out;
+        }
+        @keyframes scaleIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. ANA SAYFA (DASHBOARD) -->
+    <div id="home-view" class="h-screen w-full flex flex-col">
+        <header class="h-20 bg-white border-b flex items-center justify-between px-10 shadow-sm z-10">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-2.5 rounded-2xl text-white shadow-lg shadow-blue-200">
+                    <i data-lucide="book-marked" class="w-6 h-6"></i>
+                </div>
+                <h1 class="text-2xl font-black text-slate-800 tracking-tight">MATOTA <span class="text-blue-600">Defterim</span></h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="loadNotebooks()" class="p-2.5 text-slate-400 hover:text-blue-600 transition" title="Yenile">
+                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                </button>
+                <button onclick="openCreateModal()" class="bg-blue-600 text-white px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all font-bold">
+                    <i data-lucide="plus" class="w-5 h-5"></i> Yeni Defter
+                </button>
+            </div>
+        </header>
+        
+        <main class="flex-1 p-10 overflow-y-auto bg-slate-50/50">
+            <div id="loading-state" class="hidden flex flex-col items-center justify-center h-64 text-slate-400">
+                <div class="animate-spin mb-4"><i data-lucide="loader-2" class="w-10 h-10"></i></div>
+                <p>Defterler yükleniyor...</p>
+            </div>
+            <div id="notebook-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
+                <!-- Defter kartları -->
+            </div>
+        </main>
+    </div>
+
+    <!-- 2. DEFTER EDİTÖRÜ -->
+    <div id="editor-view" class="h-screen w-full flex flex-col hidden-view bg-slate-200">
+        <header class="h-16 bg-white/80 backdrop-blur-md border-b flex items-center justify-between px-4 z-50 shadow-sm">
+            <div class="flex items-center gap-3">
+                <button onclick="showHome()" class="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition">
+                    <i data-lucide="arrow-left"></i>
+                </button>
+                <h2 id="current-notebook-title" class="font-bold text-slate-800 border-l pl-4 truncate max-w-[200px]">Defter</h2>
+            </div>
+
+            <!-- Kalem Çubuğu -->
+            <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                <button onclick="setTool('ballpoint')" id="btn-ballpoint" class="p-2.5 rounded-xl hover:bg-white tool-active transition" title="Tükenmez">
+                    <i data-lucide="pen-tool" class="w-5 h-5"></i>
+                </button>
+                <button onclick="setTool('pencil')" id="btn-pencil" class="p-2.5 rounded-xl hover:bg-white transition" title="Kurşun">
+                    <i data-lucide="pencil" class="w-5 h-5"></i>
+                </button>
+                <button onclick="setTool('fountain')" id="btn-fountain" class="p-2.5 rounded-xl hover:bg-white transition" title="Dolma Kalem">
+                    <i data-lucide="feather" class="w-5 h-5"></i>
+                </button>
+                <button onclick="setTool('highlighter')" id="btn-highlighter" class="p-2.5 rounded-xl hover:bg-white transition" title="Fosforlu">
+                    <i data-lucide="highlighter" class="w-5 h-5"></i>
+                </button>
+                <div class="w-px h-6 bg-slate-300 mx-1"></div>
+                <button onclick="setTool('eraser_area')" id="btn-eraser_area" class="p-2.5 rounded-xl hover:bg-white transition" title="Alan Silgisi">
+                    <i data-lucide="eraser" class="w-5 h-5"></i>
+                </button>
+                <button onclick="setTool('eraser_stroke')" id="btn-eraser_stroke" class="p-2.5 rounded-xl hover:bg-white transition" title="Çizgi Silgisi">
+                    <i data-lucide="zap-off" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button onclick="addCoord()" class="p-2 text-blue-600 bg-blue-50 rounded-xl hover:bg-blue-100 transition">
+                    <i data-lucide="plus-square" class="w-5 h-5"></i>
+                </button>
+                <button onclick="undo()" class="p-2 hover:bg-slate-100 rounded-xl text-slate-500"><i data-lucide="undo-2"></i></button>
+                <button onclick="saveNotebookToSupabase()" id="save-btn" class="bg-blue-600 text-white px-5 py-2 rounded-xl flex items-center gap-2 hover:bg-blue-700 transition shadow-lg shadow-blue-200">
+                    <i data-lucide="cloud-upload" class="w-4 h-4"></i> Kaydet
+                </button>
+            </div>
+        </header>
+
+        <div class="scroll-container flex flex-col items-center py-6">
+            <div id="page-list" class="flex flex-col gap-6">
+                <!-- Sayfalar -->
+            </div>
+            <button onclick="addNewPage()" class="my-10 bg-white text-slate-600 px-12 py-5 rounded-3xl shadow-xl border border-slate-200 hover:border-blue-400 hover:text-blue-600 transition flex items-center gap-3 font-bold group">
+                <i data-lucide="plus-circle" class="group-hover:rotate-90 transition-transform duration-300"></i> Yeni Sayfa Ekle
+            </button>
+        </div>
+
+        <!-- Renk & Kalınlık Paneli -->
+        <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-xl px-8 py-4 rounded-[2.5rem] shadow-2xl border border-white flex items-center gap-10 z-50">
+            <div class="flex gap-3">
+                <button onclick="setColor('#0f172a')" class="w-9 h-9 rounded-full bg-slate-900 border-4 border-white shadow-md ring-1 ring-slate-200 scale-110"></button>
+                <button onclick="setColor('#2563eb')" class="w-9 h-9 rounded-full bg-blue-600 border-4 border-white shadow-md ring-1 ring-slate-200"></button>
+                <button onclick="setColor('#dc2626')" class="w-9 h-9 rounded-full bg-red-600 border-4 border-white shadow-md ring-1 ring-slate-200"></button>
+                <button onclick="setColor('#059669')" class="w-9 h-9 rounded-full bg-emerald-600 border-4 border-white shadow-md ring-1 ring-slate-200"></button>
+                <button onclick="setColor('#d97706')" class="w-9 h-9 rounded-full bg-amber-600 border-4 border-white shadow-md ring-1 ring-slate-200"></button>
+            </div>
+            <div class="flex items-center gap-4 border-l pl-10">
+                <div class="flex flex-col">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Kalınlık</span>
+                    <span id="brush-label" class="text-lg font-mono font-black text-blue-600">3</span>
+                </div>
+                <input type="range" min="1" max="30" value="3" oninput="updateBrushWidth(this.value)" class="w-44 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. YENİ DEFTER MODALI -->
+    <div id="create-modal" class="fixed inset-0 z-[100] modal-overlay flex items-center justify-center hidden-view">
+        <div class="bg-white w-full max-w-xl rounded-[2rem] p-10 shadow-2xl scale-in">
+            <div class="flex justify-between items-center mb-8">
+                <h3 class="text-3xl font-black text-slate-800">Yeni Defter</h3>
+                <button onclick="closeCreateModal()" class="text-slate-400 hover:text-slate-600 p-2 transition-colors">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-8">
+                <div>
+                    <label class="block text-xs font-black text-slate-400 uppercase mb-3">Defter Başlığı</label>
+                    <input type="text" id="nb-title-input" placeholder="Örn: Limit ve Süreklilik" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-blue-500 outline-none transition text-xl font-medium bg-slate-50">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-black text-slate-400 uppercase mb-4 tracking-widest">Sayfa Şablonu</label>
+                    <div class="grid grid-cols-2 gap-4 max-h-[300px] overflow-y-auto pr-2" id="template-options">
+                        <button onclick="selectTemplate('blank', '', this)" id="btn-blank-template" class="template-btn border-4 border-blue-600 rounded-3xl p-5 text-left transition bg-blue-50 group">
+                            <div class="w-full h-28 bg-white border border-slate-100 rounded-xl mb-3 shadow-sm flex items-center justify-center">
+                                <i data-lucide="file" class="text-slate-200 w-10 h-10"></i>
+                            </div>
+                            <span class="font-bold text-blue-600">Düz Beyaz</span>
+                        </button>
+                        <!-- Supabase şablonları buraya yüklenecek -->
+                    </div>
+                </div>
+
+                <button onclick="confirmCreate()" class="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-xl shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all hover:scale-[1.02] active:scale-95">
+                    Defteri Oluştur
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- SUPABASE ENTEGRASYONU ---
+        const SUPABASE_URL = "https://mpqncrkclcprjmaohpgm.supabase.co";
+        const SUPABASE_KEY = "sb_publishable_0TPVUMiQ0_5zLkzhcEe4yQ_xsDSIaF4";
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        lucide.createIcons();
+
+        // Uygulama Durumu
+        let notebooks = [];
+        let activeNotebook = null;
+        let selectedTemplate = { id: 'blank', url: '' };
+        
+        let currentTool = 'ballpoint';
+        let currentColor = '#0f172a';
+        let currentWidth = 3;
+
+        let isDrawing = false;
+        let activeCanvas = null;
+        let activeCtx = null;
+        let lastX, lastY;
+        let currentPath = [];
+        let templatesLoaded = false;
+
+        // --- DASHBOARD: DEFTERLERİ YÜKLE ---
+        async function loadNotebooks() {
+            document.getElementById('loading-state').classList.remove('hidden');
+            document.getElementById('notebook-grid').innerHTML = '';
+            
+            try {
+                const { data, error } = await supabaseClient
+                    .from('notebooks')
+                    .select('*')
+                    .order('updated_at', { ascending: false });
+
+                if (error) throw error;
+                notebooks = data || [];
+                renderNotebookList();
+            } catch (err) {
+                console.error("Yükleme hatası:", err);
+                notebooks = JSON.parse(localStorage.getItem('matota_offline')) || [];
+                renderNotebookList();
+            } finally {
+                document.getElementById('loading-state').classList.add('hidden');
+            }
+        }
+
+        function renderNotebookList() {
+            const grid = document.getElementById('notebook-grid');
+            grid.innerHTML = '';
+            notebooks.forEach(nb => {
+                const card = document.createElement('div');
+                card.className = "group bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 cursor-pointer relative";
+                card.onclick = () => showEditor(nb.id);
+                card.innerHTML = `
+                    <div class="h-52 bg-slate-50 flex items-center justify-center relative overflow-hidden">
+                        <i data-lucide="book" class="w-16 h-16 text-blue-100 group-hover:scale-110 transition-transform duration-500"></i>
+                        <div class="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white to-transparent"></div>
+                    </div>
+                    <div class="p-6">
+                        <h3 class="font-black text-slate-800 text-lg mb-1 truncate">${nb.title}</h3>
+                        <div class="flex items-center justify-between text-[10px] font-bold text-slate-400">
+                            <span class="bg-slate-100 px-2.5 py-1 rounded-full uppercase">${nb.pages.length} SAYFA</span>
+                            <span>${new Date(nb.updated_at || nb.id).toLocaleDateString('tr-TR')}</span>
+                        </div>
+                    </div>
+                    <button onclick="event.stopPropagation(); deleteNotebook(${nb.id})" class="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur rounded-2xl text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 transition-all">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                `;
+                grid.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        // --- ŞABLONLARI BUCKET'TAN ÇEK ---
+        async function fetchTemplates() {
+            if (templatesLoaded) return;
+            const container = document.getElementById('template-options');
+            
+            try {
+                const { data, error } = await supabaseClient.storage.from('fields').list();
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    data.forEach(file => {
+                        if (file.name === '.emptyFolderPlaceholder' || file.name.startsWith('.')) return;
+                        
+                        const { data: { publicUrl } } = supabaseClient.storage.from('fields').getPublicUrl(file.name);
+                        
+                        const btn = document.createElement('button');
+                        btn.className = "template-btn border-4 border-transparent rounded-3xl p-5 text-left transition bg-slate-50 hover:border-slate-200 group";
+                        btn.onclick = () => selectTemplate(file.id, publicUrl, btn);
+                        btn.innerHTML = `
+                            <div class="w-full h-28 bg-white border border-slate-100 rounded-xl mb-3 shadow-sm bg-cover bg-center" style="background-image: url('${publicUrl}')"></div>
+                            <span class="font-bold text-slate-700 text-sm truncate block">${file.name.split('.')[0]}</span>
+                        `;
+                        container.appendChild(btn);
+                    });
+                    templatesLoaded = true;
+                }
+            } catch (err) {
+                console.error("Şablonlar yüklenemedi:", err);
+            }
+        }
+
+        // --- MODAL VE OLUŞTURMA ---
+        function openCreateModal() { 
+            const modal = document.getElementById('create-modal');
+            modal.classList.remove('hidden-view'); 
+            fetchTemplates();
+        }
+
+        function closeCreateModal() { 
+            const modal = document.getElementById('create-modal');
+            modal.classList.add('hidden-view'); 
+        }
+
+        function selectTemplate(id, url, el) {
+            selectedTemplate = { id, url };
+            document.querySelectorAll('.template-btn').forEach(b => {
+                b.classList.remove('border-blue-600', 'bg-blue-50');
+                b.classList.add('border-transparent', 'bg-slate-50');
+                const span = b.querySelector('span');
+                if (span) span.classList.replace('text-blue-600', 'text-slate-700');
+            });
+            el.classList.add('border-blue-600', 'bg-blue-50');
+            el.classList.remove('border-transparent', 'bg-slate-50');
+            const activeSpan = el.querySelector('span');
+            if (activeSpan) activeSpan.classList.replace('text-slate-700', 'text-blue-600');
+        }
+
+        async function confirmCreate() {
+            const titleInput = document.getElementById('nb-title-input');
+            const title = titleInput.value.trim() || "Yeni Matematik Defteri";
+            const newNb = {
+                id: Date.now(),
+                title: title,
+                pages: [{ paths: [], template: selectedTemplate.url }],
+                updated_at: new Date().toISOString()
+            };
+
+            notebooks.unshift(newNb);
+            titleInput.value = ""; // Reset input
+            closeCreateModal();
+            showEditor(newNb.id);
+            
+            try {
+                await supabaseClient.from('notebooks').insert([newNb]);
+            } catch (e) {
+                console.error("Kayıt hatası:", e);
+                localStorage.setItem('matota_offline', JSON.stringify(notebooks));
+            }
+        }
+
+        // --- EDİTÖR MANTIĞI ---
+        function showHome() {
+            document.getElementById('home-view').classList.remove('hidden-view');
+            document.getElementById('editor-view').classList.add('hidden-view');
+            loadNotebooks();
+        }
+
+        function showEditor(id) {
+            activeNotebook = notebooks.find(n => n.id === id);
+            document.getElementById('home-view').classList.add('hidden-view');
+            document.getElementById('editor-view').classList.remove('hidden-view');
+            document.getElementById('current-notebook-title').innerText = activeNotebook.title;
+            renderPages();
+        }
+
+        function renderPages() {
+            const pageList = document.getElementById('page-list');
+            pageList.innerHTML = '';
+            activeNotebook.pages.forEach((page, idx) => {
+                const container = document.createElement('div');
+                container.className = 'a4-page-container scale-in';
+                
+                const templateLayer = document.createElement('div');
+                templateLayer.className = 'template-layer';
+                if (page.template) templateLayer.style.backgroundImage = `url('${page.template}')`;
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = 800;
+                canvas.height = 800 * 1.414;
+                canvas.dataset.index = idx;
+                
+                canvas.addEventListener('pointerdown', startDraw);
+                canvas.addEventListener('pointermove', drawing);
+                canvas.addEventListener('pointerup', endDraw);
+                
+                container.appendChild(templateLayer);
+                container.appendChild(canvas);
+                pageList.appendChild(container);
+                drawContent(canvas, page.paths);
+            });
+        }
+
+        function addNewPage() {
+            const lastTemplate = activeNotebook.pages[activeNotebook.pages.length-1]?.template || '';
+            activeNotebook.pages.push({ paths: [], template: lastTemplate });
+            renderPages();
+        }
+
+        // --- ÇİZİM MOTORU ---
+        function startDraw(e) {
+            if (e.pointerType === 'touch' && e.buttons !== 1) return; 
+
+            activeCanvas = e.target;
+            activeCtx = activeCanvas.getContext('2d');
+            isDrawing = true;
+            const pos = getPos(e);
+            lastX = pos.x; lastY = pos.y;
+            currentPath = [{ x: pos.x, y: pos.y }];
+
+            if (currentTool === 'eraser_stroke') {
+                strokeErase(pos.x, pos.y);
+                isDrawing = false;
+            }
+        }
+
+        function drawing(e) {
+            if (!isDrawing) return;
+            const pos = getPos(e);
+            
+            if (currentTool.startsWith('eraser_area')) {
+                areaErase(pos.x, pos.y);
+            } else {
+                renderLiveLine(lastX, lastY, pos.x, pos.y);
+                currentPath.push({ x: pos.x, y: pos.y });
+            }
+            lastX = pos.x; lastY = pos.y;
+        }
+
+        function endDraw() {
+            if (isDrawing && currentPath.length > 1) {
+                const idx = activeCanvas.dataset.index;
+                activeNotebook.pages[idx].paths.push({
+                    tool: currentTool,
+                    color: currentColor,
+                    width: currentWidth,
+                    points: [...currentPath]
+                });
+            }
+            isDrawing = false;
+        }
+
+        function renderLiveLine(x1, y1, x2, y2) {
+            activeCtx.beginPath();
+            activeCtx.strokeStyle = currentColor;
+            activeCtx.lineWidth = currentWidth;
+            activeCtx.lineCap = 'round';
+            activeCtx.lineJoin = 'round';
+
+            if (currentTool === 'fountain') {
+                const dist = Math.hypot(x2-x1, y2-y1);
+                activeCtx.lineWidth = Math.max(1, currentWidth * (1 + dist/6));
+            } else if (currentTool === 'highlighter') {
+                activeCtx.globalAlpha = 0.3;
+                activeCtx.lineWidth = currentWidth * 6;
+                activeCtx.lineCap = 'square';
+            } else if (currentTool === 'pencil') {
+                activeCtx.globalAlpha = 0.4;
+            }
+
+            activeCtx.moveTo(x1, y1);
+            activeCtx.lineTo(x2, y2);
+            activeCtx.stroke();
+            activeCtx.globalAlpha = 1.0;
+        }
+
+        function drawContent(canvas, paths) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            paths.forEach(p => {
+                if (p.type === 'coord') { drawCoord(ctx, p.x, p.y); return; }
+                ctx.beginPath();
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = p.width;
+                ctx.lineCap = (p.tool === 'highlighter') ? 'square' : 'round';
+                ctx.lineJoin = 'round';
+                ctx.globalAlpha = (p.tool === 'highlighter') ? 0.3 : (p.tool === 'pencil' ? 0.4 : 1);
+                
+                if (p.points.length > 0) {
+                    ctx.moveTo(p.points[0].x, p.points[0].y);
+                    p.points.forEach(pt => ctx.lineTo(pt.x, pt.y));
+                }
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            });
+        }
+
+        // --- ARAÇLAR ---
+        function setTool(t) {
+            currentTool = t;
+            document.querySelectorAll('[id^="btn-"]').forEach(b => b.classList.remove('tool-active'));
+            document.getElementById('btn-' + t).classList.add('tool-active');
+        }
+
+        function setColor(c) { 
+            currentColor = c; 
+            event.target.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('scale-110')); 
+            event.target.classList.add('scale-110'); 
+        }
+
+        function updateBrushWidth(w) { 
+            currentWidth = parseInt(w); 
+            document.getElementById('brush-label').innerText = w;
+        }
+
+        function getPos(e) {
+            const rect = e.target.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left) * (e.target.width / rect.width),
+                y: (e.clientY - rect.top) * (e.target.height / rect.height)
+            };
+        }
+
+        function strokeErase(x, y) {
+            const idx = activeCanvas.dataset.index;
+            const paths = activeNotebook.pages[idx].paths;
+            activeNotebook.pages[idx].paths = paths.filter(p => {
+                if (p.type === 'coord') return true;
+                return !p.points.some(pt => Math.hypot(pt.x - x, pt.y - y) < 25);
+            });
+            drawContent(activeCanvas, activeNotebook.pages[idx].paths);
+        }
+
+        function areaErase(x, y) {
+            activeCtx.save();
+            activeCtx.globalCompositeOperation = 'destination-out';
+            activeCtx.beginPath();
+            activeCtx.arc(x, y, currentWidth * 5, 0, Math.PI * 2);
+            activeCtx.fill();
+            activeCtx.restore();
+        }
+
+        function addCoord() {
+            if (!activeCanvas) return;
+            const idx = activeCanvas.dataset.index;
+            activeNotebook.pages[idx].paths.push({ type: 'coord', x: 400, y: 550 });
+            drawContent(activeCanvas, activeNotebook.pages[idx].paths);
+        }
+
+        function drawCoord(ctx, x, y) {
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x-200, y); ctx.lineTo(x+200, y);
+            ctx.moveTo(x, y-200); ctx.lineTo(x, y+200);
+            ctx.stroke();
+            ctx.font = 'bold 16px Inter';
+            ctx.fillStyle = '#64748b';
+            ctx.fillText('x', x+180, y-10);
+            ctx.fillText('y', x+10, y-180);
+        }
+
+        function undo() {
+            if (!activeCanvas) return;
+            const idx = activeCanvas.dataset.index;
+            activeNotebook.pages[idx].paths.pop();
+            drawContent(activeCanvas, activeNotebook.pages[idx].paths);
+        }
+
+        // --- SUPABASE VERİ YAZMA ---
+        async function saveNotebookToSupabase() {
+            const btn = document.getElementById('save-btn');
+            btn.innerHTML = '<i class="animate-spin" data-lucide="loader-2"></i> Bekleyin...';
+            lucide.createIcons();
+            
+            activeNotebook.updated_at = new Date().toISOString();
+
+            try {
+                const { error } = await supabaseClient
+                    .from('notebooks')
+                    .upsert(activeNotebook);
+                
+                if (error) throw error;
+                showMessage("Bulutla Senkronize Edildi!");
+            } catch (err) {
+                console.error("Kayıt hatası:", err);
+                localStorage.setItem('matota_offline', JSON.stringify(notebooks));
+                showMessage("Yerel Hafızaya Kaydedildi (Offline)");
+            } finally {
+                btn.innerHTML = '<i data-lucide="cloud-upload"></i> Kaydet';
+                lucide.createIcons();
+            }
+        }
+
+        async function deleteNotebook(id) {
+            if(!confirm("Bu defteri tamamen silmek üzeresin. Geri dönüşü yoktur. Emin misin?")) return;
+            
+            notebooks = notebooks.filter(n => n.id !== id);
+            renderNotebookList();
+
+            try {
+                await supabaseClient.from('notebooks').delete().match({ id });
+            } catch (err) {
+                console.error("Silme hatası:", err);
+            }
+        }
+
+        function showMessage(txt) {
+            const toast = document.createElement('div');
+            toast.className = "fixed top-24 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-2xl animate-bounce z-[200]";
+            toast.innerText = txt;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Başlangıç
+        loadNotebooks();
+    </script>
+</body>
+</html>
