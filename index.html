@@ -51,7 +51,7 @@
         }
         canvas {
             position: absolute;
-            top: 60px; /* Header altından başla */
+            top: 60px;
             left: 0;
             outline: none;
         }
@@ -96,6 +96,29 @@
             gap: 8px;
             z-index: 100;
         }
+
+        /* Eraser Options Submenu */
+        .tool-submenu {
+            position: absolute;
+            top: 110%;
+            left: 0;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 200;
+        }
+        .tool-submenu button {
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: left;
+            transition: background 0.2s;
+        }
+        .tool-submenu button:hover { background: #f8fafc; }
     </style>
 </head>
 <body>
@@ -136,10 +159,27 @@
                 <button onclick="setTool('pencil')" id="btn-pencil" class="p-2 rounded-xl hover:bg-white" title="Kurşun Kalem"><i data-lucide="pencil"></i></button>
                 <button onclick="setTool('highlighter')" id="btn-highlighter" class="p-2 rounded-xl hover:bg-white" title="Fosforlu"><i data-lucide="highlighter"></i></button>
                 <button onclick="setTool('lasso')" id="btn-lasso" class="p-2 rounded-xl hover:bg-white" title="Halat (Taşıma)"><i data-lucide="lasso"></i></button>
-                <button onclick="setTool('shape_rect')" id="btn-shape_rect" class="p-2 rounded-xl hover:bg-white" title="Dikdörtgen"><i data-lucide="square"></i></button>
-                <button onclick="setTool('shape_circle')" id="btn-shape_circle" class="p-2 rounded-xl hover:bg-white" title="Daire"><i data-lucide="circle"></i></button>
+                
+                <!-- Şekiller Menu -->
+                <div class="relative group">
+                    <button class="p-2 rounded-xl hover:bg-white" title="Şekiller"><i data-lucide="shapes"></i></button>
+                    <div class="absolute top-full left-0 hidden group-hover:flex flex-col bg-white border rounded-xl shadow-xl z-[300]">
+                        <button onclick="setTool('shape_rect')" class="p-2 hover:bg-slate-50"><i data-lucide="square"></i></button>
+                        <button onclick="setTool('shape_circle')" class="p-2 hover:bg-slate-50"><i data-lucide="circle"></i></button>
+                        <button onclick="setTool('shape_triangle')" class="p-2 hover:bg-slate-50"><i data-lucide="triangle"></i></button>
+                    </div>
+                </div>
+
                 <div class="w-px h-6 bg-slate-300 mx-1"></div>
-                <button onclick="setTool('eraser_stroke')" id="btn-eraser_stroke" class="p-2 rounded-xl hover:bg-white" title="Çizgi Silgisi"><i data-lucide="zap-off"></i></button>
+
+                <!-- Silgi Menu -->
+                <div class="relative group">
+                    <button onclick="setTool('eraser_stroke')" id="btn-eraser" class="p-2 rounded-xl hover:bg-white" title="Silgi"><i data-lucide="eraser"></i></button>
+                    <div class="absolute top-full left-0 hidden group-hover:flex flex-col bg-white border rounded-xl shadow-xl z-[300] min-w-[100px]">
+                        <button onclick="setTool('eraser_stroke')" class="p-2 text-xs font-bold hover:bg-slate-50 border-b">Çizgi Silgi</button>
+                        <button onclick="setTool('eraser_area')" class="p-2 text-xs font-bold hover:bg-slate-50">Alan Silgi</button>
+                    </div>
+                </div>
             </div>
 
             <div class="flex items-center gap-2">
@@ -158,17 +198,19 @@
             </button>
         </div>
 
-        <!-- Renk ve Kalınlık -->
-        <div class="fixed bottom-8 right-8 bg-white/95 backdrop-blur-xl px-8 py-4 rounded-[2.5rem] shadow-2xl border flex items-center gap-8 z-50">
-            <div class="flex gap-2.5">
-                <button onclick="setColor('#0f172a')" class="w-9 h-9 rounded-full bg-slate-900 border-4 border-white shadow-md"></button>
-                <button onclick="setColor('#2563eb')" class="w-9 h-9 rounded-full bg-blue-600 border-4 border-white shadow-md"></button>
-                <button onclick="setColor('#dc2626')" class="w-9 h-9 rounded-full bg-red-600 border-4 border-white shadow-md"></button>
-                <button onclick="setColor('#059669')" class="w-9 h-9 rounded-full bg-emerald-600 border-4 border-white shadow-md"></button>
+        <!-- Renk Paneli -->
+        <div class="fixed bottom-8 right-8 bg-white/95 backdrop-blur-xl px-8 py-4 rounded-[2.5rem] shadow-2xl border flex items-center gap-6 z-50">
+            <div id="quick-colors" class="flex gap-2.5">
+                <!-- Dinamik renkler buraya -->
             </div>
-            <div class="flex items-center gap-4 border-l pl-8">
+            <button onclick="triggerColorPicker()" class="w-9 h-9 rounded-full bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition">
+                <i data-lucide="plus" class="w-5 h-5"></i>
+            </button>
+            <input type="color" id="hidden-color-picker" class="hidden" onchange="addNewColor(this.value)">
+
+            <div class="flex items-center gap-4 border-l pl-6">
                 <span id="brush-label" class="text-sm font-black text-blue-600">3</span>
-                <input type="range" min="1" max="40" value="3" oninput="updateBrushWidth(this.value)" class="w-40 accent-blue-600">
+                <input type="range" min="1" max="60" value="3" oninput="updateBrushWidth(this.value)" class="w-40 accent-blue-600">
             </div>
         </div>
 
@@ -193,21 +235,10 @@
                 <div>
                     <label class="block text-xs font-black text-slate-400 uppercase mb-4 tracking-widest">Sistem Şablonları</label>
                     <div class="grid grid-cols-2 gap-4 max-h-[350px] overflow-y-auto pr-2" id="template-options">
-                        <button onclick="selectTemplate('blank', '', this)" class="template-btn border-4 border-blue-600 rounded-3xl p-5 text-left bg-blue-50">
-                            <span class="font-bold text-blue-600">Düz Beyaz</span>
-                        </button>
-                        <button onclick="selectTemplate('grid', 'grid', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50">
-                            <span class="font-bold text-slate-700">Kareli</span>
-                        </button>
-                        <button onclick="selectTemplate('lined', 'lined', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50">
-                            <span class="font-bold text-slate-700">Çizgili</span>
-                        </button>
-                        <button onclick="selectTemplate('grid-split', 'grid-split', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50">
-                            <span class="font-bold text-slate-700">Kareli İkiye Bölünmüş</span>
-                        </button>
-                        <button onclick="selectTemplate('lined-split', 'lined-split', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50">
-                            <span class="font-bold text-slate-700">Çizgili İkiye Bölünmüş</span>
-                        </button>
+                        <button onclick="selectTemplate('blank', '', this)" class="template-btn border-4 border-blue-600 rounded-3xl p-5 text-left bg-blue-50"><span class="font-bold text-blue-600">Düz Beyaz</span></button>
+                        <button onclick="selectTemplate('grid', 'grid', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50"><span class="font-bold text-slate-700">Kareli</span></button>
+                        <button onclick="selectTemplate('lined', 'lined', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50"><span class="font-bold text-slate-700">Çizgili</span></button>
+                        <button onclick="selectTemplate('grid-split', 'grid-split', this)" class="template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50"><span class="font-bold text-slate-700">Kareli İkiye Bölünmüş</span></button>
                     </div>
                 </div>
                 <button onclick="confirmCreate()" class="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-xl shadow-xl hover:bg-blue-700 transition-all">Defteri Oluştur</button>
@@ -228,6 +259,51 @@
         let isDrawing = false, lastX = 0, lastY = 0, currentPath = [], zoomLevel = 1.0;
         let lassoSelectedPaths = [], lassoStartPos = null, isMoving = false;
         let activeCanvas = null, activeCtx = null;
+        
+        // Renk Paleti State
+        let quickColors = JSON.parse(localStorage.getItem('matota_colors')) || ['#0f172a', '#2563eb', '#dc2626', '#059669', '#d97706'];
+        let editingColorIndex = -1;
+
+        // --- RENK PANELI ---
+        function renderColors() {
+            const container = document.getElementById('quick-colors');
+            container.innerHTML = '';
+            quickColors.forEach((color, index) => {
+                const btn = document.createElement('button');
+                btn.className = `w-9 h-9 rounded-full border-4 border-white shadow-md ring-1 ring-slate-200 transition-transform ${currentColor === color ? 'scale-125 ring-blue-500' : ''}`;
+                btn.style.backgroundColor = color;
+                
+                // Seçme
+                btn.onclick = () => { currentColor = color; renderColors(); };
+                
+                // Düzenleme (Sağ tık veya uzun basma)
+                btn.oncontextmenu = (e) => { e.preventDefault(); editColor(index); };
+                
+                container.appendChild(btn);
+            });
+            localStorage.setItem('matota_colors', JSON.stringify(quickColors));
+        }
+
+        function triggerColorPicker() {
+            if(quickColors.length >= 5) { showMessage("Maksimum 5 renk ekleyebilirsiniz."); return; }
+            editingColorIndex = -1;
+            document.getElementById('hidden-color-picker').click();
+        }
+
+        function editColor(index) {
+            editingColorIndex = index;
+            document.getElementById('hidden-color-picker').click();
+        }
+
+        function addNewColor(val) {
+            if (editingColorIndex > -1) {
+                quickColors[editingColorIndex] = val;
+            } else {
+                quickColors.push(val);
+            }
+            currentColor = val;
+            renderColors();
+        }
 
         // --- ZOOM ---
         function updateZoom() {
@@ -265,29 +341,6 @@
             lucide.createIcons();
         }
 
-        // --- MODAL ---
-        function openCreateModal() { document.getElementById('create-modal').classList.remove('hidden-view'); }
-        function closeCreateModal() { document.getElementById('create-modal').classList.add('hidden-view'); }
-        function selectTemplate(id, url, el) {
-            selectedTemplate = { id, url };
-            document.querySelectorAll('.template-btn').forEach(b => b.className = "template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50 transition hover:border-slate-200");
-            el.className = "template-btn border-4 border-blue-600 rounded-3xl p-5 text-left bg-blue-50";
-        }
-
-        async function confirmCreate() {
-            const title = document.getElementById('nb-title-input').value.trim() || "Yeni Defter";
-            const newNb = { id: Date.now(), title, pages: [{ 
-                paths: [], 
-                template: selectedTemplate.url,
-                course: "",
-                date: new Date().toISOString().split('T')[0]
-            }], updated_at: new Date().toISOString() };
-            notebooks.unshift(newNb);
-            closeCreateModal();
-            showEditor(newNb.id);
-            await supabaseClient.from('notebooks').insert([newNb]);
-        }
-
         // --- EDİTÖR ---
         function showHome() { document.getElementById('home-view').classList.remove('hidden-view'); document.getElementById('editor-view').classList.add('hidden-view'); loadNotebooks(); }
         function showEditor(id) {
@@ -296,6 +349,7 @@
             document.getElementById('editor-view').classList.remove('hidden-view');
             document.getElementById('current-notebook-title').innerText = activeNotebook.title;
             renderPages();
+            renderColors();
         }
 
         function renderPages() {
@@ -305,120 +359,88 @@
             activeNotebook.pages.forEach((page, idx) => {
                 const container = document.createElement('div');
                 container.className = 'a4-page-container';
-                
                 const header = document.createElement('div');
                 header.className = 'page-header';
-                header.innerHTML = `
-                    <input type="text" placeholder="Ders Adı" value="${page.course || ''}" onchange="updatePageInfo(${idx}, 'course', this.value)">
-                    <input type="date" value="${page.date || ''}" onchange="updatePageInfo(${idx}, 'date', this.value)">
-                `;
-
+                header.innerHTML = `<input type="text" placeholder="Ders Adı" value="${page.course || ''}" onchange="updatePageInfo(${idx}, 'course', this.value)"><input type="date" value="${page.date || ''}" onchange="updatePageInfo(${idx}, 'date', this.value)">`;
                 const template = document.createElement('canvas');
                 template.width = 800; template.height = 1131 - 60;
                 template.className = 'template-layer';
                 drawTemplate(template, page.template);
-                
                 const baseCanvas = document.createElement('canvas');
                 baseCanvas.width = 800; baseCanvas.height = 1131 - 60;
                 baseCanvas.className = 'base-canvas';
-                
                 const actCnv = document.createElement('canvas');
                 actCnv.width = 800; actCnv.height = 1131 - 60;
                 actCnv.className = 'active-canvas';
                 actCnv.dataset.index = idx;
-                
                 actCnv.addEventListener('pointerdown', startAction);
                 actCnv.addEventListener('pointermove', doAction);
                 actCnv.addEventListener('pointerup', endAction);
                 actCnv.addEventListener('pointerleave', endAction);
-                
                 container.append(header, template, baseCanvas, actCnv);
                 list.appendChild(container);
                 drawContent(baseCanvas, page.paths);
             });
         }
 
-        function updatePageInfo(idx, field, val) {
-            if (activeNotebook && activeNotebook.pages[idx]) {
-                activeNotebook.pages[idx][field] = val;
-            }
-        }
-
         function drawTemplate(canvas, type) {
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, 800, 1131);
             if (!type) return;
-
-            ctx.strokeStyle = "#e2e8f0";
-            ctx.lineWidth = 1;
-
+            ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1;
             if (type.includes('grid')) {
                 for (let x = 0; x <= 800; x += 20) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 1131); ctx.stroke(); }
                 for (let y = 0; y <= 1131; y += 20) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(800, y); ctx.stroke(); }
             } else if (type.includes('lined')) {
                 for (let y = 30; y <= 1131; y += 25) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(800, y); ctx.stroke(); }
             }
-
             if (type.includes('split')) {
                 ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.moveTo(400, 0); ctx.lineTo(400, 1131); ctx.stroke();
             }
         }
 
-        function addNewPage() {
-            if (!activeNotebook) return;
+        function updatePageInfo(idx, field, val) { activeNotebook.pages[idx][field] = val; }
+        function addNewPage() { 
             const last = activeNotebook.pages[activeNotebook.pages.length-1];
-            activeNotebook.pages.push({ 
-                paths: [], 
-                template: last?.template || '', 
-                course: last?.course || "",
-                date: new Date().toISOString().split('T')[0]
-            });
+            activeNotebook.pages.push({ paths: [], template: last?.template || '', course: last?.course || "", date: new Date().toISOString().split('T')[0] });
             renderPages();
         }
 
-        // --- ÇİZİM ---
+        // --- ÇİZİM VE HAREKET ---
         function startAction(e) {
-            // Avuç içi algılamama: S-Pen dışı touch'ı engelle
             if (e.pointerType === 'touch' && e.buttons !== 1) return;
-
             activeCanvas = e.target;
             const idx = activeCanvas.dataset.index;
             const pos = getPos(e);
-            
-            // Fix: Başlangıç koordinatlarını hemen ayarla
             lastX = pos.x; lastY = pos.y;
             isDrawing = true;
             currentPath = [{ x: pos.x, y: pos.y }];
-            
             activeCtx = activeCanvas.getContext('2d');
-            activeCtx.lineCap = 'round'; activeCtx.lineJoin = 'round';
 
             if (currentTool === 'lasso') {
                 lassoStartPos = pos;
-                // Daha önce bir seçim yapılmış mı?
-                const hit = lassoSelectedPaths.length > 0 && isInsideLasso(pos);
+                const hit = lassoSelectedPaths.length > 0 && isInsideSelection(pos);
                 if (hit) isMoving = true;
-                else {
-                    lassoSelectedPaths = [];
-                    activeCtx.clearRect(0,0,800,1131);
-                }
+                else { lassoSelectedPaths = []; activeCtx.clearRect(0,0,800,1131); }
             } else if (currentTool === 'eraser_stroke') {
                 strokeErase(pos.x, pos.y, idx);
                 isDrawing = false;
+            } else if (currentTool === 'eraser_area') {
+                areaErase(pos.x, pos.y, idx);
             } else if (currentTool.startsWith('shape_')) {
-                lassoStartPos = pos; // Şekil başlangıcı için lassoStartPos kullanıyoruz
+                lassoStartPos = pos;
             }
         }
 
-        function isInsideLasso(pos) {
+        function isInsideSelection(pos) {
             if (lassoSelectedPaths.length === 0) return false;
-            const pts = lassoSelectedPaths.flatMap(p => p.points || [{x: p.x, y: p.y}]);
-            const minX = Math.min(...pts.map(p => p.x));
-            const maxX = Math.max(...pts.map(p => p.x));
-            const minY = Math.min(...pts.map(p => p.y));
-            const maxY = Math.max(...pts.map(p => p.y));
-            return pos.x >= minX - 15 && pos.x <= maxX + 15 && pos.y >= minY - 15 && pos.y <= maxY + 15;
+            const pts = lassoSelectedPaths.flatMap(p => p.points || [{x: p.x, y: p.y}, {x: p.x + (p.w||0), y: p.y + (p.h||0)}]);
+            const minX = Math.min(...pts.map(p => p.x)) - 20;
+            const maxX = Math.max(...pts.map(p => p.x)) + 20;
+            const minY = Math.min(...pts.map(p => p.y)) - 20;
+            const maxY = Math.max(...pts.map(p => p.y)) + 20;
+            return pos.x >= minX && pos.x <= maxX && pos.y >= minY && pos.y <= maxY;
         }
 
         function doAction(e) {
@@ -431,11 +453,8 @@
                     const dx = pos.x - lastX;
                     const dy = pos.y - lastY;
                     lassoSelectedPaths.forEach(p => {
-                        if (p.points) {
-                            p.points.forEach(pt => { pt.x += dx; pt.y += dy; });
-                        } else {
-                            p.x += dx; p.y += dy;
-                        }
+                        if (p.points) p.points.forEach(pt => { pt.x += dx; pt.y += dy; });
+                        else { p.x += dx; p.y += dy; }
                     });
                     drawPageContent(idx);
                     renderLassoHighlight();
@@ -443,16 +462,20 @@
                     activeCtx.clearRect(0,0,800,1131);
                     activeCtx.setLineDash([5, 5]);
                     activeCtx.strokeStyle = '#3b82f6';
-                    if (lassoStartPos) {
-                        activeCtx.strokeRect(lassoStartPos.x, lassoStartPos.y, pos.x - lassoStartPos.x, pos.y - lassoStartPos.y);
-                    }
+                    activeCtx.strokeRect(lassoStartPos.x, lassoStartPos.y, pos.x - lassoStartPos.x, pos.y - lassoStartPos.y);
                     activeCtx.setLineDash([]);
                 }
+            } else if (currentTool === 'eraser_area') {
+                areaErase(pos.x, pos.y, idx);
+                // Visual Indicator
+                activeCtx.clearRect(0,0,800,1131);
+                activeCtx.beginPath();
+                activeCtx.arc(pos.x, pos.y, currentWidth * 5, 0, Math.PI*2);
+                activeCtx.strokeStyle = "#cbd5e1";
+                activeCtx.stroke();
             } else if (currentTool.startsWith('shape_')) {
                 activeCtx.clearRect(0,0,800,1131);
-                if (lassoStartPos) {
-                    drawShapePreview(activeCtx, lassoStartPos, pos);
-                }
+                drawShapePreview(activeCtx, lassoStartPos, pos);
             } else {
                 activeCtx.strokeStyle = currentColor;
                 activeCtx.lineWidth = currentWidth;
@@ -472,124 +495,67 @@
             const pos = getPos(e);
 
             if (currentTool === 'lasso' && !isMoving) {
-                if (lassoStartPos) {
-                    const rect = { 
-                        x1: Math.min(lassoStartPos.x, pos.x), 
-                        y1: Math.min(lassoStartPos.y, pos.y), 
-                        x2: Math.max(lassoStartPos.x, pos.x), 
-                        y2: Math.max(lassoStartPos.y, pos.y) 
-                    };
-                    lassoSelectedPaths = activeNotebook.pages[idx].paths.filter(p => {
-                        const pts = p.points || [{x:p.x, y:p.y}];
-                        return pts.some(pt => pt.x > rect.x1 && pt.x < rect.x2 && pt.y > rect.y1 && pt.y < rect.y2);
-                    });
-                    renderLassoHighlight();
-                }
-            } else if (currentTool.startsWith('shape_')) {
-                if (lassoStartPos) {
-                    const type = currentTool.split('_')[1];
-                    activeNotebook.pages[idx].paths.push({ 
-                        type, 
-                        x: lassoStartPos.x, 
-                        y: lassoStartPos.y, 
-                        w: pos.x - lassoStartPos.x, 
-                        h: pos.y - lassoStartPos.y, 
-                        color: currentColor, 
-                        width: currentWidth 
-                    });
-                    drawPageContent(idx);
-                }
-            } else if (!currentTool.includes('lasso') && currentPath.length > 1) {
-                activeNotebook.pages[idx].paths.push({ 
-                    tool: currentTool, 
-                    color: currentColor, 
-                    width: currentWidth, 
-                    points: [...currentPath] 
+                const rect = { x1: Math.min(lassoStartPos.x, pos.x), y1: Math.min(lassoStartPos.y, pos.y), x2: Math.max(lassoStartPos.x, pos.x), y2: Math.max(lassoStartPos.y, pos.y) };
+                lassoSelectedPaths = activeNotebook.pages[idx].paths.filter(p => {
+                    const pts = p.points || [{x:p.x, y:p.y}, {x: p.x+(p.w||0), y: p.y+(p.h||0)}];
+                    return pts.some(pt => pt.x > rect.x1 && pt.x < rect.x2 && pt.y > rect.y1 && pt.y < rect.y2);
                 });
+                renderLassoHighlight();
+            } else if (currentTool.startsWith('shape_')) {
+                const type = currentTool.split('_')[1];
+                activeNotebook.pages[idx].paths.push({ type, x: lassoStartPos.x, y: lassoStartPos.y, w: pos.x - lassoStartPos.x, h: pos.y - lassoStartPos.y, color: currentColor, width: currentWidth });
+                drawPageContent(idx);
+            } else if (currentTool !== 'lasso' && !currentTool.startsWith('eraser') && currentPath.length > 1) {
+                activeNotebook.pages[idx].paths.push({ tool: currentTool, color: currentColor, width: currentWidth, points: [...currentPath] });
                 drawPageContent(idx);
             }
             
-            isDrawing = false; 
-            isMoving = false;
-            lassoStartPos = null; // Reset start pos to avoid null errors
+            isDrawing = false; isMoving = false; lassoStartPos = null;
+            if (currentTool === 'eraser_area') activeCtx.clearRect(0,0,800,1131);
         }
 
         function renderLassoHighlight() {
-            if (!activeCtx) return;
             activeCtx.clearRect(0,0,800,1131);
             if (lassoSelectedPaths.length === 0) return;
-            
             activeCtx.save();
-            activeCtx.shadowBlur = 15;
-            activeCtx.shadowColor = 'rgba(37, 99, 235, 0.6)';
-            activeCtx.strokeStyle = 'rgba(37, 99, 235, 0.4)';
-            activeCtx.lineWidth = 8;
-            
+            activeCtx.shadowBlur = 15; activeCtx.shadowColor = 'rgba(37, 99, 235, 0.6)';
+            activeCtx.strokeStyle = 'rgba(37, 99, 235, 0.4)'; activeCtx.lineWidth = 10;
             lassoSelectedPaths.forEach(p => {
                 activeCtx.beginPath();
-                if (p.points && p.points.length > 0) {
+                if (p.points) {
                     activeCtx.moveTo(p.points[0].x, p.points[0].y);
                     p.points.forEach(pt => activeCtx.lineTo(pt.x, pt.y));
-                } else if (p.type === 'rect') {
-                    activeCtx.rect(p.x, p.y, p.w, p.h);
-                } else if (p.type === 'circle') {
-                    activeCtx.arc(p.x, p.y, Math.hypot(p.w, p.h), 0, Math.PI*2);
-                } else if (p.type === 'coord') {
-                    activeCtx.moveTo(p.x-100, p.y); activeCtx.lineTo(p.x+100, p.y);
-                    activeCtx.moveTo(p.x, p.y-100); activeCtx.lineTo(p.x, p.y+100);
-                }
+                } else if (p.type === 'rect') activeCtx.rect(p.x, p.y, p.w, p.h);
+                else if (p.type === 'circle') activeCtx.arc(p.x, p.y, Math.hypot(p.w, p.h), 0, Math.PI*2);
+                else if (p.type === 'triangle') drawTriangle(activeCtx, p.x, p.y, p.w, p.h);
                 activeCtx.stroke();
             });
             activeCtx.restore();
         }
 
-        function drawPageContent(idx) {
-            const containers = document.querySelectorAll('.a4-page-container');
-            if (containers[idx]) {
-                const baseCnv = containers[idx].querySelector('.base-canvas');
-                const actCnv = containers[idx].querySelector('.active-canvas');
-                if (baseCnv && activeNotebook && activeNotebook.pages[idx]) {
-                    drawContent(baseCnv, activeNotebook.pages[idx].paths);
-                }
-                if (actCnv) {
-                    actCnv.getContext('2d').clearRect(0,0,800,1131);
-                }
-            }
+        function drawShapePreview(ctx, start, end) {
+            ctx.strokeStyle = currentColor; ctx.lineWidth = currentWidth;
+            if (currentTool === 'shape_rect') ctx.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
+            else if (currentTool === 'shape_circle') { ctx.beginPath(); ctx.arc(start.x, start.y, Math.hypot(end.x - start.x, end.y - start.y), 0, Math.PI * 2); ctx.stroke(); }
+            else if (currentTool === 'shape_triangle') { drawTriangle(ctx, start.x, start.y, end.x - start.x, end.y - start.y); ctx.stroke(); }
         }
 
-        function drawShapePreview(ctx, start, end) {
-            ctx.strokeStyle = currentColor; 
-            ctx.lineWidth = currentWidth;
-            if (currentTool === 'shape_rect') {
-                ctx.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
-            } else if (currentTool === 'shape_circle') {
-                ctx.beginPath();
-                const r = Math.hypot(end.x - start.x, end.y - start.y);
-                ctx.arc(start.x, start.y, r, 0, Math.PI * 2);
-                ctx.stroke();
-            }
+        function drawTriangle(ctx, x, y, w, h) {
+            ctx.beginPath(); ctx.moveTo(x + w / 2, y); ctx.lineTo(x, y + h); ctx.lineTo(x + w, y + h); ctx.closePath();
         }
 
         function drawContent(canvas, paths) {
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             paths.forEach(p => {
-                ctx.save();
-                ctx.beginPath();
-                ctx.strokeStyle = p.color || currentColor;
-                ctx.lineWidth = p.width || 2;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-
-                if (p.type === 'rect') {
-                    ctx.strokeRect(p.x, p.y, p.w, p.h);
-                } else if (p.type === 'circle') {
-                    ctx.beginPath(); 
-                    ctx.arc(p.x, p.y, Math.hypot(p.w, p.h), 0, Math.PI*2); 
-                    ctx.stroke();
-                } else if (p.type === 'coord') {
-                    drawCoord(ctx, p.x, p.y);
-                } else {
+                ctx.save(); ctx.beginPath();
+                ctx.strokeStyle = p.color || currentColor; ctx.lineWidth = p.width || 2;
+                ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                if (p.type === 'rect') ctx.strokeRect(p.x, p.y, p.w, p.h);
+                else if (p.type === 'circle') { ctx.beginPath(); ctx.arc(p.x, p.y, Math.hypot(p.w, p.h), 0, Math.PI*2); ctx.stroke(); }
+                else if (p.type === 'triangle') { drawTriangle(ctx, p.x, p.y, p.w, p.h); ctx.stroke(); }
+                else if (p.type === 'coord') drawCoord(ctx, p.x, p.y);
+                else {
                     ctx.globalAlpha = p.tool === 'highlighter' ? 0.3 : (p.tool === 'pencil' ? 0.5 : 1);
                     if (p.points?.length > 0) {
                         ctx.moveTo(p.points[0].x, p.points[0].y);
@@ -601,94 +567,61 @@
             });
         }
 
+        function drawPageContent(idx) {
+            const containers = document.querySelectorAll('.a4-page-container');
+            if (containers[idx]) {
+                const baseCnv = containers[idx].querySelector('.base-canvas');
+                const actCnv = containers[idx].querySelector('.active-canvas');
+                drawContent(baseCnv, activeNotebook.pages[idx].paths);
+                actCnv.getContext('2d').clearRect(0,0,800,1131);
+            }
+        }
+
+        // --- SİLGİ MANTIĞI ---
+        function strokeErase(x, y, idx) {
+            activeNotebook.pages[idx].paths = activeNotebook.pages[idx].paths.filter(p => {
+                const pts = p.points || [{x:p.x, y:p.y}, {x: p.x + (p.w||0), y: p.y + (p.h||0)}];
+                return !pts.some(pt => Math.hypot(pt.x - x, pt.y - y) < 30);
+            });
+            drawPageContent(idx);
+        }
+
+        function areaErase(x, y, idx) {
+            const radius = currentWidth * 5;
+            activeNotebook.pages[idx].paths = activeNotebook.pages[idx].paths.filter(p => {
+                if (p.points) {
+                    // Çizgideki herhangi bir nokta silgi alanına giriyor mu?
+                    return !p.points.some(pt => Math.hypot(pt.x - x, pt.y - y) < radius);
+                } else {
+                    // Şekil alanına giriyor mu?
+                    return Math.hypot(p.x - x, p.y - y) > radius;
+                }
+            });
+            drawPageContent(idx);
+        }
+
         // --- YARDIMCI ---
         function getPos(e) { 
             const r = e.target.getBoundingClientRect(); 
-            // Zoom etkisini koordinatlarda tersine çevir
-            return { 
-                x: (e.clientX - r.left) * (800 / r.width), 
-                y: (e.clientY - r.top) * (1131 / r.height) 
-            }; 
+            return { x: (e.clientX - r.left) * (800 / r.width), y: (e.clientY - r.top) * (1131 / r.height) }; 
         }
         function setTool(t) { 
             currentTool = t; 
             document.querySelectorAll('[id^="btn-"]').forEach(b => b.classList.remove('tool-active')); 
-            const btn = document.getElementById('btn-' + t);
+            const btn = document.getElementById('btn-' + t) || document.getElementById('btn-eraser');
             if (btn) btn.classList.add('tool-active'); 
         }
-        function setColor(c) { currentColor = c; }
         function updateBrushWidth(w) { currentWidth = parseInt(w); document.getElementById('brush-label').innerText = w; }
-        
-        function strokeErase(x, y, idx) {
-            if (activeNotebook && activeNotebook.pages[idx]) {
-                activeNotebook.pages[idx].paths = activeNotebook.pages[idx].paths.filter(p => {
-                    const pts = p.points || [{x:p.x, y:p.y}];
-                    return !pts.some(pt => Math.hypot(pt.x - x, pt.y - y) < 20);
-                });
-                drawPageContent(idx);
-            }
-        }
+        function undo() { const idx = activeNotebook.pages.length - 1; activeNotebook.pages[idx].paths.pop(); drawPageContent(idx); }
+        function addCoord() { activeNotebook.pages[activeNotebook.pages.length-1].paths.push({ type: 'coord', x: 400, y: 550, color: '#94a3b8', width: 2 }); drawPageContent(activeNotebook.pages.length-1); }
+        function drawCoord(ctx, x, y) { ctx.beginPath(); ctx.moveTo(x-180, y); ctx.lineTo(x+180, y); ctx.moveTo(x, y-180); ctx.lineTo(x, y+180); ctx.stroke(); ctx.font = 'bold 14px Inter'; ctx.fillText('x', x+170, y-10); ctx.fillText('y', x+10, y-170); }
+        function showMessage(t) { const msg = document.createElement('div'); msg.className = "fixed top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-2 rounded-full z-[100] animate-bounce"; msg.innerText = t; document.body.appendChild(msg); setTimeout(() => msg.remove(), 2000); }
 
-        function addCoord() {
-            if (!activeNotebook) return;
-            const idx = activeNotebook.pages.length - 1;
-            activeNotebook.pages[idx].paths.push({ type: 'coord', x: 400, y: 550, color: '#94a3b8', width: 2 });
-            drawPageContent(idx);
-        }
-
-        function drawCoord(ctx, x, y) {
-            ctx.beginPath();
-            ctx.moveTo(x-180, y); ctx.lineTo(x+180, y);
-            ctx.moveTo(x, y-180); ctx.lineTo(x, y+180);
-            ctx.stroke();
-            ctx.font = 'bold 14px Inter'; ctx.fillText('x', x+170, y-10); ctx.fillText('y', x+10, y-170);
-        }
-
-        function undo() {
-            if (!activeNotebook) return;
-            const idx = activeNotebook.pages.length - 1;
-            if (activeNotebook.pages[idx].paths.length > 0) {
-                activeNotebook.pages[idx].paths.pop();
-                drawPageContent(idx);
-            }
-        }
-
-        async function saveNotebookToSupabase(isAuto = false) {
-            if (!activeNotebook) return;
-            const btn = document.getElementById('save-btn');
-            if(!isAuto) btn.innerText = "Kaydediliyor...";
-            
-            activeNotebook.updated_at = new Date().toISOString();
-            await supabaseClient.from('notebooks').upsert(activeNotebook);
-            
-            if(!isAuto) {
-                btn.innerHTML = '<i data-lucide="cloud-upload" class="w-4 h-4"></i> Kaydet';
-                lucide.createIcons();
-                showMessage("Başarıyla kaydedildi!");
-            } else {
-                console.log("Otomatik kayıt başarılı");
-            }
-        }
-
-        async function deleteNotebook(id) {
-            if(!confirm("Bu defteri tamamen silmek üzeresin?")) return;
-            notebooks = notebooks.filter(n => n.id !== id);
-            renderNotebookList();
-            await supabaseClient.from('notebooks').delete().match({ id });
-        }
-
-        function showMessage(t) {
-            const msg = document.createElement('div');
-            msg.className = "fixed top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-2 rounded-full z-[100] animate-bounce";
-            msg.innerText = t; document.body.appendChild(msg); setTimeout(() => msg.remove(), 2000);
-        }
-
-        // --- OTOMATİK KAYIT SİSTEMİ (5 DAKİKA) ---
-        setInterval(() => {
-            if (activeNotebook) {
-                saveNotebookToSupabase(true);
-            }
-        }, 5 * 60 * 1000);
+        async function saveNotebookToSupabase() { await supabaseClient.from('notebooks').upsert(activeNotebook); showMessage("Kaydedildi!"); }
+        function openCreateModal() { document.getElementById('create-modal').classList.remove('hidden-view'); }
+        function closeCreateModal() { document.getElementById('create-modal').classList.add('hidden-view'); }
+        function selectTemplate(id, url, el) { selectedTemplate = { id, url }; document.querySelectorAll('.template-btn').forEach(b => b.className = "template-btn border-4 border-transparent rounded-3xl p-5 text-left bg-slate-50 transition hover:border-slate-200"); el.className = "template-btn border-4 border-blue-600 rounded-3xl p-5 text-left bg-blue-50"; }
+        async function confirmCreate() { const title = document.getElementById('nb-title-input').value.trim() || "Yeni Defter"; const newNb = { id: Date.now(), title, pages: [{ paths: [], template: selectedTemplate.url, course: "", date: new Date().toISOString().split('T')[0] }], updated_at: new Date().toISOString() }; notebooks.unshift(newNb); closeCreateModal(); showEditor(newNb.id); await supabaseClient.from('notebooks').insert([newNb]); }
 
         loadNotebooks();
     </script>
